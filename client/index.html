@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Verbum9</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- EKRAN: Lobi -->
+  <div id="screen-lobby" class="screen active">
+    <div class="lobby-content">
+      <div class="logo">
+        <span class="logo-verbum">VERBUM</span><span class="logo-9">9</span>
+      </div>
+      <p class="logo-sub">Türkçe Kelime Yarışı</p>
+      <button id="btn-play" class="btn-primary">Oyna</button>
+    </div>
+  </div>
+
+  <!-- EKRAN: Matris Doldurma -->
+  <div id="screen-fill" class="screen">
+    <div class="fill-header">
+      <h2>Harfleri Seç</h2>
+      <p class="fill-hint">Klavyeyle yaz veya hücreye tıkla.</p>
+    </div>
+    <div id="fill-matrix" class="matrix-grid fill-mode">
+      <!-- 9 hücre JS tarafından doldurulur -->
+    </div>
+    <div class="fill-actions">
+      <button id="btn-random-all" class="btn-secondary">🎲 Tümünü Rastgele</button>
+      <button id="btn-start-game" class="btn-primary" disabled>Başla →</button>
+    </div>
+  </div>
+
+  <!-- EKRAN: Geri Sayım -->
+  <div id="screen-countdown" class="screen">
+    <div id="countdown-number" class="countdown-number">5</div>
+    <p class="countdown-label">Hazır ol!</p>
+  </div>
+
+  <!-- EKRAN: Oyun -->
+  <div id="screen-game" class="screen">
+    <div class="game-header">
+      <div id="game-score" class="game-stat">
+        <span class="stat-label">PUAN</span>
+        <span id="score-value" class="stat-value">0</span>
+      </div>
+      <div id="game-timer" class="game-timer">3:00</div>
+      <div id="game-words-count" class="game-stat">
+        <span class="stat-label">KELİME</span>
+        <span id="words-count-value" class="stat-value">0</span>
+      </div>
+    </div>
+
+    <div class="game-body">
+      <div class="game-area">
+        <div id="game-matrix" class="matrix-grid game-mode">
+          <!-- Hücreler JS tarafından oluşturulur -->
+        </div>
+
+        <div class="word-compose-area">
+          <div id="word-display" class="word-display">
+            <div id="word-letters" class="word-letters"></div>
+            <div id="word-feedback" class="word-feedback"></div>
+          </div>
+          <div class="word-actions">
+            <button id="btn-backspace" class="btn-action" title="Son harfi sil">⌫</button>
+            <button id="btn-clear" class="btn-action btn-clear" title="Temizle">✕</button>
+            <button id="btn-submit" class="btn-action btn-submit" disabled title="Gönder (Enter)">✓</button>
+          </div>
+        </div>
+
+        <button id="btn-toggle-words" class="btn-toggle-words">📝 Kelimelerim</button>
+      </div>
+
+      <div id="words-panel" class="words-panel">
+        <div class="words-panel-header">
+          <h3>Kelimelerim</h3>
+          <button id="btn-close-words" class="btn-close-panel">✕</button>
+        </div>
+        <ul id="words-list" class="words-list"></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- EKRAN: Sonuç -->
+  <div id="screen-result" class="screen">
+    <div class="result-content">
+      <h2>Oyun Bitti!</h2>
+      <div class="result-score">
+        <div class="result-score-number" id="result-score-number">0</div>
+        <div class="result-score-label">puan</div>
+      </div>
+      <div class="result-words-section">
+        <h3>Bulduğun Kelimeler</h3>
+        <ul id="result-words-list" class="words-list result-mode"></ul>
+      </div>
+      <button id="btn-again" class="btn-primary">Tekrar Oyna</button>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

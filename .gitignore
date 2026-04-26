@@ -1,0 +1,7 @@
+node_modules/
+.env
+*.db
+_docx_extracted/
+verbum9_text.txt
+~$*
+~WRL*

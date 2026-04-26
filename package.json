@@ -1,0 +1,12 @@
+{
+  "name": "verbum9",
+  "version": "0.1.0",
+  "description": "Türkçe kelime yarışı oyunu",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "npx nodemon server/index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
