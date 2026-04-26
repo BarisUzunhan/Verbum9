@@ -7,7 +7,8 @@
       "Bash(node server/index.js)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/js/main.js)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/css/style.css)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/css/style.css)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }
