@@ -1,4 +1,4 @@
-import { state, formatTime, getRandomLetter, setFillLetter, matrixComplete } from './game.js';
+import { state, formatTime, matrixComplete } from './game.js';
 
 // ─── Ekran geçişi ────────────────────────────────────────────
 
@@ -25,7 +25,7 @@ export function renderFillMatrix(onCellClick) {
   document.getElementById('btn-start-game').disabled = !matrixComplete();
 }
 
-export function updateFillCell(pos) {
+export function updateFillCell() {
   const tiles = document.querySelectorAll('#fill-matrix .tile');
   tiles.forEach((t, i) => {
     t.classList.toggle('active', i === state.activeFillCell);
@@ -35,10 +35,14 @@ export function updateFillCell(pos) {
   document.getElementById('btn-start-game').disabled = !matrixComplete();
 }
 
-// ─── Geri Sayım ─────────────────────────────────────────────
+// ─── Geri Sayım Overlay ──────────────────────────────────────
+
+export function showCountdownOverlay(visible) {
+  document.getElementById('countdown-overlay').hidden = !visible;
+}
 
 export function updateCountdown(n) {
-  document.getElementById('countdown-number').textContent = n === 0 ? 'BAŞLA!' : n;
+  document.getElementById('countdown-number').textContent = n;
 }
 
 // ─── Oyun Matrisi ────────────────────────────────────────────
@@ -123,8 +127,7 @@ export function addWordToPanel(wordObj) {
   const li = document.createElement('li');
   li.className = wordObj.valid ? 'valid' : 'invalid';
 
-  const wordText = document.createTextNode(wordObj.word);
-  li.appendChild(wordText);
+  li.appendChild(document.createTextNode(wordObj.word));
 
   if (wordObj.valid) {
     const pts = document.createElement('span');
@@ -138,28 +141,46 @@ export function addWordToPanel(wordObj) {
 
 // ─── Sonuç Ekranı ────────────────────────────────────────────
 
-export function renderResult() {
+export function renderResult(missedWords = []) {
   document.getElementById('result-score-number').textContent = state.score;
 
   const list = document.getElementById('result-words-list');
   list.innerHTML = '';
-
   const sorted = [...state.submittedWords].sort((a, b) => b.points - a.points);
   sorted.forEach(w => {
     const li = document.createElement('li');
     li.className = w.valid ? 'valid' : 'invalid';
-
     li.appendChild(document.createTextNode(w.word));
-
     if (w.valid) {
       const pts = document.createElement('span');
       pts.className = 'word-points';
       pts.textContent = `+${w.points}`;
       li.appendChild(pts);
     }
-
     list.appendChild(li);
   });
+
+  // Kaçırılan kelimeler — başta gizli, düğmeyle açılır
+  const missedSection = document.getElementById('result-missed-section');
+  const missedList = document.getElementById('result-missed-list');
+  missedSection.hidden = true;
+  missedList.innerHTML = '';
+
+  if (missedWords.length > 0) {
+    document.getElementById('result-missed-count').textContent = missedWords.length + ' kelime';
+    missedWords.forEach(word => {
+      const li = document.createElement('li');
+      li.className = 'valid';
+      li.appendChild(document.createTextNode(word));
+      const pts = document.createElement('span');
+      pts.className = 'word-points';
+      pts.textContent = word.length + ' harf';
+      li.appendChild(pts);
+      missedList.appendChild(li);
+    });
+  }
+
+  document.getElementById('btn-show-missed').hidden = missedWords.length === 0;
 }
 
 // ─── Kelimeler Paneli Toggle ─────────────────────────────────

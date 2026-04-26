@@ -186,6 +186,11 @@ Verbum9/
 
 ## Sürüm Geçmişi
 
+### v1.1 — 2026-04-26
+- Sözlük TDK kaynaklı mertemin/turkish-word-list ile güncellendi: 686 → 46.819 kelime.
+- Çok kelimeli ifadeler, özel isimler, rakam/noktalama içeren kelimeler filtrelendi.
+- `/sozluk` arama sayfası eklendi — tarayıcıdan tüm kelimelere bakılabilir.
+
 ### v1.0 — 2026-04-26
 - İlk tasarım dokümanı oluşturuldu.
 - `Vebum9.docx` analiz edildi; tüm özellikler özetlendi.

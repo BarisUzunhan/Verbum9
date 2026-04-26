@@ -34,14 +34,13 @@
     </div>
   </div>
 
-  <!-- EKRAN: Geri Sayım -->
-  <div id="screen-countdown" class="screen">
-    <div id="countdown-number" class="countdown-number">5</div>
-    <p class="countdown-label">Hazır ol!</p>
-  </div>
-
   <!-- EKRAN: Oyun -->
   <div id="screen-game" class="screen">
+    <!-- Geri sayım overlay — matrisin üstüne biner, arka planda matris görünür -->
+    <div id="countdown-overlay" class="countdown-overlay" hidden>
+      <div id="countdown-number" class="countdown-number">5</div>
+      <p class="countdown-label">Hazır ol!</p>
+    </div>
     <div class="game-header">
       <div id="game-score" class="game-stat">
         <span class="stat-label">PUAN</span>
@@ -97,7 +96,19 @@
         <h3>Bulduğun Kelimeler</h3>
         <ul id="result-words-list" class="words-list result-mode"></ul>
       </div>
-      <button id="btn-again" class="btn-primary">Tekrar Oyna</button>
+
+      <div class="result-words-section" id="result-missed-section" hidden>
+        <div class="result-section-header">
+          <h3>Kaçırdığın Kelimeler</h3>
+          <span id="result-missed-count" class="missed-count"></span>
+        </div>
+        <ul id="result-missed-list" class="words-list result-mode missed-mode"></ul>
+      </div>
+
+      <div class="result-actions">
+        <button id="btn-show-missed" class="btn-secondary">Diğer Kelimeler →</button>
+        <button id="btn-again" class="btn-primary">Tekrar Oyna</button>
+      </div>
     </div>
   </div>
 

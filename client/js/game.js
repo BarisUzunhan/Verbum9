@@ -1,4 +1,4 @@
-import { isValidWord, isHomophone } from './dictionary.js';
+import { isValidWord, isHomophone, getWordArray } from './dictionary.js';
 import { playWordFound, playWarningBeep, playUrgentBeep, playInvalidWord } from './sounds.js';
 
 export const PHASES = {
@@ -9,7 +9,6 @@ export const PHASES = {
   RESULT: 'result',
 };
 
-// Türkçe harf frekanslarına göre ağırlıklı havuz
 const LETTER_POOL =
   'AAAAAAAAAAAEEEEEEEEEIIIIIIIINNNNNNNTTTTTTTKKKKKKLLLLLLRRRRRRMMMMMSSSSYYYYOOOODDDBBBUUUÜÜÇÇÇÖÖSŞZZHĞĞPPFVCGVAC';
 
@@ -87,7 +86,6 @@ export function submitCurrentWord() {
 
 export function startCountdown(onTick, onDone) {
   state.phase = PHASES.COUNTDOWN;
-  state.countdownValue = COUNTDOWN_START;
   onTick(COUNTDOWN_START);
 
   let count = COUNTDOWN_START;
@@ -146,4 +144,37 @@ export function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+// ─── Matristeki harflerle kurulabilecek kelimeleri bul ────────
+
+export function findMissedWords() {
+  const matrixCounts = {};
+  for (const letter of state.matrix) {
+    if (letter) matrixCounts[letter] = (matrixCounts[letter] || 0) + 1;
+  }
+
+  const foundLower = new Set(
+    state.submittedWords.filter(w => w.valid).map(w => w.word.toLocaleLowerCase('tr-TR'))
+  );
+
+  const possible = [];
+  for (const word of getWordArray()) {
+    if (foundLower.has(word)) continue;
+
+    const wordUpper = word.toLocaleUpperCase('tr-TR');
+    const needed = {};
+    for (const ch of wordUpper) {
+      needed[ch] = (needed[ch] || 0) + 1;
+    }
+
+    let ok = true;
+    for (const ch in needed) {
+      if ((matrixCounts[ch] || 0) < needed[ch]) { ok = false; break; }
+    }
+
+    if (ok) possible.push(word);
+  }
+
+  return possible.sort((a, b) => b.length - a.length || a.localeCompare(b, 'tr'));
 }

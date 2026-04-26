@@ -3,12 +3,13 @@ import {
   state, PHASES,
   getRandomLetter, setFillLetter,
   addLetterToWord, removeLastLetter, clearCurrentWord,
-  submitCurrentWord,
+  submitCurrentWord, findMissedWords,
   startCountdown, startGame, resetToFill,
 } from './game.js';
 import {
   showScreen,
-  renderFillMatrix, updateFillCell, updateCountdown,
+  renderFillMatrix, updateFillCell,
+  showCountdownOverlay, updateCountdown,
   renderGameMatrix, updateGameMatrix,
   updateWordDisplay, showWordFeedback,
   updateTimer, updateScore, addWordToPanel,
@@ -84,38 +85,42 @@ function onFillKeydown(e) {
 
 function normalizeLetter(key) {
   const map = { i: 'İ', ı: 'I' };
-  const k = map[key] || key.toLocaleUpperCase('tr-TR');
-  return k;
+  return map[key] || key.toLocaleUpperCase('tr-TR');
 }
 
 // ─── Geri Sayım → Oyun ───────────────────────────────────────
+// Matris game screen'de render edilir; üstüne yarı saydam overlay gelir.
+// Oyuncu geri sayım sırasında harfleri görerek kelime planlayabilir.
 
 function beginCountdown() {
   document.removeEventListener('keydown', onFillKeydown);
-  showScreen('screen-countdown');
-  startCountdown(n => updateCountdown(n), startPlayPhase);
-}
 
-function startPlayPhase() {
-  updateCountdown(0);
-  renderGameMatrix(onTileClick);
+  // Oyun ekranını matris ile birlikte hazırla (henüz interaktif değil)
+  renderGameMatrix(onTileClick); // tıklama PHASES.PLAYING kontrolüyle zaten bloke
   updateWordDisplay();
   updateTimer(180);
   updateScore();
   document.getElementById('words-list').innerHTML = '';
-  bindGameEvents();
 
-  setTimeout(() => {
-    showScreen('screen-game');
-    startGame(
-      seconds => updateTimer(seconds),
-      () => {
-        removeGameEvents();
-        renderResult();
-        showScreen('screen-result');
-      }
-    );
-  }, 600);
+  showScreen('screen-game');
+  showCountdownOverlay(true);
+
+  startCountdown(
+    n => updateCountdown(n),
+    () => {
+      showCountdownOverlay(false);
+      bindGameEvents();
+      startGame(
+        seconds => updateTimer(seconds),
+        () => {
+          removeGameEvents();
+          const missed = findMissedWords();
+          renderResult(missed);
+          showScreen('screen-result');
+        }
+      );
+    }
+  );
 }
 
 // ─── Oyun Etkileşimi ─────────────────────────────────────────
@@ -169,7 +174,12 @@ function onGameKeydown(e) {
   if (e.key === 'Escape') { e.preventDefault(); clearCurrentWord(); updateGameMatrix(); updateWordDisplay(); }
 }
 
-// ─── Tekrar Oyna ─────────────────────────────────────────────
+// ─── Sonuç Ekranı Olayları ───────────────────────────────────
+
+document.getElementById('btn-show-missed').addEventListener('click', () => {
+  document.getElementById('result-missed-section').hidden = false;
+  document.getElementById('btn-show-missed').hidden = true;
+});
 
 document.getElementById('btn-again').addEventListener('click', goToFill);
 
