@@ -26,7 +26,7 @@ let currentUser = null;
 // ─── Çok oyunculu durum ───────────────────────────────────────
 
 let mode = 'solo'; // 'solo' | 'multi'
-const mp = { playerIndex: -1, turnIndex: -1, opponentName: '', myScore: 0 };
+const mp = { playerIndex: -1, turnIndex: -1, opponentName: '', myScore: 0, invalidWords: [] };
 
 // io global olarak /socket.io/socket.io.js tarafından yüklenir
 const socket = io({ autoConnect: false });
@@ -427,6 +427,7 @@ socket.on('matched', ({ opponentName, playerIndex, turnIndex }) => {
   mp.turnIndex = turnIndex;
   mp.opponentName = opponentName;
   mp.myScore = 0;
+  mp.invalidWords = [];
 
   state.matrix = Array(9).fill('');
   state.activeFillCell = -1;
@@ -565,6 +566,7 @@ socket.on('word_result', result => {
     addWordToPanel({ word: result.word, points: result.points, valid: true });
   } else if (result.status === 'invalid' || result.status === 'duplicate') {
     addWordToPanel({ word: result.word, points: 0, valid: false });
+    mp.invalidWords.push(result.word);
   }
 });
 
@@ -822,6 +824,22 @@ function renderResultMulti(players, missedWords = []) {
   const myWordSet = new Set(my.words.map(w => w.word.toLocaleLowerCase('tr-TR')));
   fillWordList('multi-my-words', my.words, opWordSet);
   fillWordList('multi-op-words', op.words, myWordSet);
+
+  // Geçersiz kelimeler — itiraz butonu ile göster
+  if (mp.invalidWords.length > 0) {
+    const myList = document.getElementById('multi-my-words');
+    mp.invalidWords.forEach(word => {
+      const li = document.createElement('li');
+      li.className = 'invalid';
+      li.appendChild(document.createTextNode(word));
+      const btn = document.createElement('button');
+      btn.className = 'btn-dispute';
+      btn.dataset.word = word.toLocaleLowerCase('tr-TR');
+      btn.textContent = 'İtiraz Et';
+      li.appendChild(btn);
+      myList.appendChild(li);
+    });
+  }
 
   document.getElementById('multi-result').hidden = false;
   document.getElementById('result-words-section').hidden = true;
