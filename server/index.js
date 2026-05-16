@@ -1,4 +1,9 @@
 require('dotenv').config();
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[UnhandledRejection]', reason);
+});
+
 const http = require('http');
 const express = require('express');
 const path = require('path');
@@ -348,42 +353,52 @@ app.patch('/api/disputes/:id', async (req, res) => {
 // ─── Auth API ────────────────────────────────────────────────
 
 app.post('/api/auth/register', async (req, res) => {
-  const { username, password } = req.body || {};
-  if (!username || !password) return res.json({ ok: false, error: 'Kullanıcı adı ve şifre gerekli.' });
-  if (username.trim().length < 3) return res.json({ ok: false, error: 'Kullanıcı adı en az 3 karakter olmalı.' });
-  if (password.length < 6) return res.json({ ok: false, error: 'Şifre en az 6 karakter olmalı.' });
+  try {
+    const { username, password } = req.body || {};
+    if (!username || !password) return res.json({ ok: false, error: 'Kullanıcı adı ve şifre gerekli.' });
+    if (username.trim().length < 3) return res.json({ ok: false, error: 'Kullanıcı adı en az 3 karakter olmalı.' });
+    if (password.length < 6) return res.json({ ok: false, error: 'Şifre en az 6 karakter olmalı.' });
 
-  const existing = await userService.getUserByUsername(username);
-  if (existing) return res.json({ ok: false, error: 'Bu kullanıcı adı alınmış.' });
+    const existing = await userService.getUserByUsername(username);
+    if (existing) return res.json({ ok: false, error: 'Bu kullanıcı adı alınmış.' });
 
-  const token = crypto.randomBytes(32).toString('hex');
-  const user = {
-    id: Date.now(),
-    username: username.trim(),
-    passwordHash: await bcrypt.hash(password, 10),
-    token,
-    totalScore: 0,
-    level: 1,
-    klBalance: 0,
-    gamesPlayed: 0,
-    gamesWon: 0,
-    createdAt: new Date().toISOString(),
-  };
-  await userService.createUser(user);
-  res.json({ ok: true, token, user: userService.safeUser(user) });
+    const token = crypto.randomBytes(32).toString('hex');
+    const user = {
+      id: Date.now(),
+      username: username.trim(),
+      passwordHash: await bcrypt.hash(password, 10),
+      token,
+      totalScore: 0,
+      level: 1,
+      klBalance: 0,
+      gamesPlayed: 0,
+      gamesWon: 0,
+      createdAt: new Date().toISOString(),
+    };
+    await userService.createUser(user);
+    res.json({ ok: true, token, user: userService.safeUser(user) });
+  } catch (err) {
+    console.error('[register]', err);
+    res.json({ ok: false, error: 'Sunucu hatası.' });
+  }
 });
 
 app.post('/api/auth/login', async (req, res) => {
-  const { username, password } = req.body || {};
-  if (!username || !password) return res.json({ ok: false, error: 'Kullanıcı adı ve şifre gerekli.' });
+  try {
+    const { username, password } = req.body || {};
+    if (!username || !password) return res.json({ ok: false, error: 'Kullanıcı adı ve şifre gerekli.' });
 
-  const user = await userService.getUserByUsername(username);
-  if (!user) return res.json({ ok: false, error: 'Kullanıcı bulunamadı.' });
-  if (!await bcrypt.compare(password, user.passwordHash)) return res.json({ ok: false, error: 'Şifre yanlış.' });
+    const user = await userService.getUserByUsername(username);
+    if (!user) return res.json({ ok: false, error: 'Kullanıcı bulunamadı.' });
+    if (!await bcrypt.compare(password, user.passwordHash)) return res.json({ ok: false, error: 'Şifre yanlış.' });
 
-  const token = crypto.randomBytes(32).toString('hex');
-  await userService.updateUserToken(user.id, token);
-  res.json({ ok: true, token, user: userService.safeUser({ ...user, token }) });
+    const token = crypto.randomBytes(32).toString('hex');
+    await userService.updateUserToken(user.id, token);
+    res.json({ ok: true, token, user: userService.safeUser({ ...user, token }) });
+  } catch (err) {
+    console.error('[login]', err);
+    res.json({ ok: false, error: 'Sunucu hatası.' });
+  }
 });
 
 app.get('/api/auth/me', async (req, res) => {
