@@ -45,6 +45,15 @@
         <button type="submit" id="btn-register" class="btn-primary auth-submit">Kayıt Ol</button>
         <p class="auth-switch">Zaten hesabın var mı? <button type="button" id="btn-to-login" class="auth-switch-btn">Giriş Yap</button></p>
       </form>
+
+      <div id="auth-pending" class="auth-pending" hidden>
+        <div class="auth-pending-icon">✉️</div>
+        <p class="auth-pending-title">E-postanı Doğrula</p>
+        <p class="auth-pending-desc">Doğrulama linkini <strong id="auth-pending-email"></strong> adresine gönderdik. Linke tıklayınca hesabın aktifleşir.</p>
+        <button id="btn-resend" class="btn-secondary">Tekrar Gönder</button>
+        <p class="auth-pending-hint">Spam klasörünü de kontrol et.</p>
+        <button type="button" id="btn-pending-to-login" class="auth-switch-btn">← Girişe Dön</button>
+      </div>
     </div>
   </div>
 

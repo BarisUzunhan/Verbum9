@@ -350,16 +350,46 @@ async function init() {
 
 // ─── Giriş / Kayıt ───────────────────────────────────────────
 
+let _pendingUsername = '';
+
+function showAuthPending(email) {
+  document.getElementById('form-login').hidden = true;
+  document.getElementById('form-register').hidden = true;
+  document.getElementById('auth-pending').hidden = false;
+  const emailEl = document.getElementById('auth-pending-email');
+  if (email) {
+    const [local, domain] = email.split('@');
+    emailEl.textContent = local[0] + '***@' + domain;
+  } else {
+    emailEl.textContent = '';
+  }
+  setAuthError('');
+}
+
+function showAuthLogin() {
+  document.getElementById('auth-pending').hidden = true;
+  document.getElementById('form-register').hidden = true;
+  document.getElementById('form-login').hidden = false;
+  setAuthError('');
+}
+
 function bindAuth() {
   document.getElementById('btn-to-register').addEventListener('click', () => {
     document.getElementById('form-login').hidden = true;
     document.getElementById('form-register').hidden = false;
     setAuthError('');
   });
-  document.getElementById('btn-to-login').addEventListener('click', () => {
-    document.getElementById('form-register').hidden = true;
-    document.getElementById('form-login').hidden = false;
-    setAuthError('');
+  document.getElementById('btn-to-login').addEventListener('click', showAuthLogin);
+  document.getElementById('btn-pending-to-login').addEventListener('click', showAuthLogin);
+
+  document.getElementById('btn-resend').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-resend');
+    btn.disabled = true;
+    btn.textContent = 'Gönderiliyor...';
+    const data = await apiFetch('POST', '/api/auth/resend-verification', { username: _pendingUsername });
+    btn.disabled = false;
+    btn.textContent = data.ok ? '✓ Gönderildi' : 'Tekrar Gönder';
+    if (!data.ok) setTimeout(() => { btn.textContent = 'Tekrar Gönder'; }, 3000);
   });
 
   document.getElementById('form-login').addEventListener('submit', async e => {
@@ -377,6 +407,9 @@ function bindAuth() {
       renderLobby();
       showScreen('screen-lobby');
       startLobby();
+    } else if (data.code === 'email_not_verified') {
+      _pendingUsername = data.username || username;
+      showAuthPending(null);
     } else {
       setAuthError(data.error);
     }
@@ -392,13 +425,10 @@ function bindAuth() {
     btn.disabled = true;
     const data = await apiFetch('POST', '/api/auth/register', { username, email, password });
     btn.disabled = false;
-    if (data.ok) {
-      localStorage.setItem(TOKEN_KEY, data.token);
-      currentUser = data.user;
-      renderLobby();
-      showScreen('screen-lobby');
-      showLobbyTutorial();
-    } else {
+    if (data.ok && data.pending) {
+      _pendingUsername = username;
+      showAuthPending(email);
+    } else if (!data.ok) {
       setAuthError(data.error);
     }
   });

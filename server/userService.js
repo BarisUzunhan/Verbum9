@@ -43,33 +43,37 @@ function calcLevel(totalScore) {
 function fromDB(u) {
   if (!u) return null;
   return {
-    id:           u.id,
-    username:     u.username,
-    passwordHash: u.password_hash,
-    token:        u.token,
-    email:        decryptEmail(u.email),
-    totalScore:   u.total_score,
-    level:        u.level,
-    klBalance:    u.kl_balance,
-    gamesPlayed:  u.games_played,
-    gamesWon:     u.games_won,
-    createdAt:    u.created_at,
+    id:                u.id,
+    username:          u.username,
+    passwordHash:      u.password_hash,
+    token:             u.token,
+    email:             decryptEmail(u.email),
+    emailVerified:     u.email_verified     ?? false,
+    verificationToken: u.verification_token ?? null,
+    totalScore:        u.total_score,
+    level:             u.level,
+    klBalance:         u.kl_balance,
+    gamesPlayed:       u.games_played,
+    gamesWon:          u.games_won,
+    createdAt:         u.created_at,
   };
 }
 
 function toDB(u) {
   return {
-    id:            u.id,
-    username:      u.username,
-    password_hash: u.passwordHash,
-    token:         u.token,
-    email:         encryptEmail(u.email),
-    total_score:   u.totalScore   || 0,
-    level:         u.level        || 1,
-    kl_balance:    u.klBalance    || 0,
-    games_played:  u.gamesPlayed  || 0,
-    games_won:     u.gamesWon     || 0,
-    created_at:    u.createdAt,
+    id:                 u.id,
+    username:           u.username,
+    password_hash:      u.passwordHash,
+    token:              u.token             ?? null,
+    email:              encryptEmail(u.email),
+    email_verified:     u.emailVerified     ?? false,
+    verification_token: u.verificationToken ?? null,
+    total_score:        u.totalScore   || 0,
+    level:              u.level        || 1,
+    kl_balance:         u.klBalance    || 0,
+    games_played:       u.gamesPlayed  || 0,
+    games_won:          u.gamesWon     || 0,
+    created_at:         u.createdAt,
   };
 }
 
@@ -88,6 +92,29 @@ async function getUserByToken(token) {
   const { data } = await supabase
     .from('users').select('*').eq('token', token).maybeSingle();
   return fromDB(data);
+}
+
+async function getUserByVerificationToken(token) {
+  if (!token) return null;
+  const { data } = await supabase
+    .from('users').select('*').eq('verification_token', token).maybeSingle();
+  return fromDB(data);
+}
+
+async function verifyEmail(token) {
+  const { data } = await supabase
+    .from('users')
+    .update({ email_verified: true, verification_token: null })
+    .eq('verification_token', token)
+    .select().single();
+  return fromDB(data);
+}
+
+async function setVerificationToken(userId, token) {
+  await supabase
+    .from('users')
+    .update({ verification_token: token })
+    .eq('id', userId);
 }
 
 async function getUserByUsername(username) {
@@ -149,8 +176,11 @@ module.exports = {
   safeUser,
   getUserByToken,
   getUserByUsername,
+  getUserByVerificationToken,
   createUser,
   updateUserToken,
+  verifyEmail,
+  setVerificationToken,
   deductKL,
   recordGameResult,
 };

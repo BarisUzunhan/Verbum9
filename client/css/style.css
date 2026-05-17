@@ -153,6 +153,38 @@ html, body {
   margin-top: 4px;
 }
 
+.auth-pending {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  width: 100%;
+  padding: 8px 0;
+}
+
+.auth-pending-icon { font-size: 3rem; }
+
+.auth-pending-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--accent2);
+}
+
+.auth-pending-desc {
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  line-height: 1.55;
+}
+
+.auth-pending-desc strong { color: var(--text); }
+
+.auth-pending-hint {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+
 /* ── LOBİ (ANA SAYFA) ─────────────────────── */
 
 #screen-lobby {

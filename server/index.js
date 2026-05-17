@@ -13,7 +13,63 @@ const os = require('os');
 const bcrypt = require('bcryptjs');
 const { Server } = require('socket.io');
 const userService = require('./userService');
-const supabase = require('./supabase');
+const supabase    = require('./supabase');
+const { Resend }  = require('resend');
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+const APP_URL = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+
+async function sendVerificationEmail(to, token) {
+  const link = `${APP_URL}/verify-email?token=${token}`;
+  await resend.emails.send({
+    from: process.env.EMAIL_FROM || 'Verbum9 <onboarding@resend.dev>',
+    to,
+    subject: 'Verbum9 — E-posta Adresini Doğrula',
+    html: `
+      <div style="font-family:system-ui;max-width:480px;margin:0 auto;padding:32px;background:#0f0e17;color:#fff;border-radius:16px">
+        <h1 style="margin:0 0 24px;letter-spacing:-1px">
+          <span style="color:#e94560">VERBUM</span><span style="color:#4cc9f0">9</span>
+        </h1>
+        <p style="font-size:1rem;margin:0 0 8px">Merhaba!</p>
+        <p style="color:#8892b0;line-height:1.6;margin:0 0 24px">
+          Hesabını aktifleştirmek için aşağıdaki butona bas. Link 24 saat geçerlidir.
+        </p>
+        <a href="${link}"
+           style="display:inline-block;padding:14px 28px;background:#e94560;color:#fff;
+                  border-radius:10px;text-decoration:none;font-weight:700;font-size:1rem">
+          E-postamı Doğrula →
+        </a>
+        <p style="color:#8892b0;font-size:0.8rem;margin-top:24px;word-break:break-all">
+          Buton çalışmıyorsa bu linki tarayıcına kopyala:<br>${link}
+        </p>
+      </div>
+    `,
+  });
+}
+
+function verifyPage(msg, success) {
+  const color = success ? '#06d6a0' : '#ef233c';
+  return `<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Verbum9</title>
+    <style>*{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:system-ui;min-height:100vh;display:flex;align-items:center;
+         justify-content:center;background:#0f0e17;color:#fff;padding:24px}
+    .card{background:#1a1a2e;border-radius:20px;padding:40px 32px;text-align:center;
+          max-width:420px;width:100%}
+    h1{font-size:2.5rem;letter-spacing:-1px;margin-bottom:24px}
+    .icon{font-size:3rem;margin-bottom:16px}
+    p{color:#8892b0;line-height:1.6;margin-bottom:24px}
+    a{display:inline-block;padding:12px 24px;background:#e94560;color:#fff;
+      border-radius:10px;text-decoration:none;font-weight:700}</style>
+  </head><body><div class="card">
+    <h1><span style="color:#e94560">VERBUM</span><span style="color:#4cc9f0">9</span></h1>
+    <div class="icon">${success ? '✅' : '❌'}</div>
+    <p style="color:${color};font-weight:600;font-size:1.1rem">${msg}</p>
+    <a href="/">Oyuna Git →</a>
+  </div></body></html>`;
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -356,29 +412,35 @@ app.post('/api/auth/register', async (req, res) => {
   try {
     const { username, email, password } = req.body || {};
     if (!username || !password) return res.json({ ok: false, error: 'Kullanıcı adı ve şifre gerekli.' });
-    if (!email || !email.includes('@') || !email.includes('.')) return res.json({ ok: false, error: 'Geçerli bir e-posta adresi gir.' });
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      return res.json({ ok: false, error: 'Geçerli bir e-posta adresi gir.' });
     if (username.trim().length < 3) return res.json({ ok: false, error: 'Kullanıcı adı en az 3 karakter olmalı.' });
     if (password.length < 6) return res.json({ ok: false, error: 'Şifre en az 6 karakter olmalı.' });
 
     const existing = await userService.getUserByUsername(username);
     if (existing) return res.json({ ok: false, error: 'Bu kullanıcı adı alınmış.' });
 
-    const token = crypto.randomBytes(32).toString('hex');
+    const verificationToken = crypto.randomBytes(32).toString('hex');
     const user = {
       id: Date.now(),
       username: username.trim(),
       email: email.trim().toLowerCase(),
+      emailVerified: false,
+      verificationToken,
       passwordHash: await bcrypt.hash(password, 10),
-      token,
-      totalScore: 0,
-      level: 1,
-      klBalance: 0,
-      gamesPlayed: 0,
-      gamesWon: 0,
+      token: null,
+      totalScore: 0, level: 1, klBalance: 0, gamesPlayed: 0, gamesWon: 0,
       createdAt: new Date().toISOString(),
     };
     await userService.createUser(user);
-    res.json({ ok: true, token, user: userService.safeUser(user) });
+
+    try {
+      await sendVerificationEmail(user.email, verificationToken);
+    } catch (mailErr) {
+      console.error('[register] mail gönderilemedi:', mailErr);
+    }
+
+    res.json({ ok: true, pending: true });
   } catch (err) {
     console.error('[register]', err);
     res.json({ ok: false, error: 'Sunucu hatası.' });
@@ -393,6 +455,7 @@ app.post('/api/auth/login', async (req, res) => {
     const user = await userService.getUserByUsername(username);
     if (!user) return res.json({ ok: false, error: 'Kullanıcı bulunamadı.' });
     if (!await bcrypt.compare(password, user.passwordHash)) return res.json({ ok: false, error: 'Şifre yanlış.' });
+    if (!user.emailVerified) return res.json({ ok: false, error: 'E-postanı doğrulamalısın.', code: 'email_not_verified', username: user.username });
 
     const token = crypto.randomBytes(32).toString('hex');
     await userService.updateUserToken(user.id, token);
@@ -408,6 +471,30 @@ app.get('/api/auth/me', async (req, res) => {
   const user = await userService.getUserByToken(token);
   if (!user) return res.status(401).json({ ok: false, error: 'Giriş gerekli.' });
   res.json({ ok: true, user: userService.safeUser(user) });
+});
+
+app.get('/verify-email', async (req, res) => {
+  const { token } = req.query;
+  if (!token) return res.send(verifyPage('Geçersiz doğrulama linki.', false));
+  const user = await userService.getUserByVerificationToken(token);
+  if (!user) return res.send(verifyPage('Bu link geçersiz veya daha önce kullanılmış.', false));
+  await userService.verifyEmail(token);
+  res.send(verifyPage('E-posta doğrulandı! Artık giriş yapabilirsin.', true));
+});
+
+app.post('/api/auth/resend-verification', async (req, res) => {
+  try {
+    const { username } = req.body || {};
+    const user = await userService.getUserByUsername(username);
+    if (!user || user.emailVerified) return res.json({ ok: false });
+    const newToken = crypto.randomBytes(32).toString('hex');
+    await userService.setVerificationToken(user.id, newToken);
+    await sendVerificationEmail(user.email, newToken);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[resend-verification]', err);
+    res.json({ ok: false, error: 'Mail gönderilemedi.' });
+  }
 });
 
 // ─── Socket.IO — Çok Oyunculu Motor ─────────────────────────
