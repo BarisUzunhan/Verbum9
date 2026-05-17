@@ -14,16 +14,23 @@ const bcrypt = require('bcryptjs');
 const { Server } = require('socket.io');
 const userService = require('./userService');
 const supabase    = require('./supabase');
-const { Resend }  = require('resend');
-
-const resend = new Resend(process.env.RESEND_API_KEY);
+const nodemailer = require('nodemailer');
 
 const APP_URL = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
 
+const _mailer = nodemailer.createTransport({
+  host: 'smtp-relay.brevo.com',
+  port: 587,
+  auth: {
+    user: process.env.BREVO_SMTP_USER,
+    pass: process.env.BREVO_SMTP_KEY,
+  },
+});
+
 async function sendVerificationEmail(to, token) {
   const link = `${APP_URL}/verify-email?token=${token}`;
-  await resend.emails.send({
-    from: process.env.EMAIL_FROM || 'Verbum9 <onboarding@resend.dev>',
+  await _mailer.sendMail({
+    from: process.env.EMAIL_FROM || 'Verbum9 <noreply@verbum9.com>',
     to,
     subject: 'Verbum9 — E-posta Adresini Doğrula',
     html: `
