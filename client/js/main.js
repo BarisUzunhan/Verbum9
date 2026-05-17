@@ -388,10 +388,12 @@ function goToOnline() {
   mode = 'multi';
   mp.myScore = 0;
   socket.auth = { token: localStorage.getItem(TOKEN_KEY) };
-  socket.connect();
-  socket.emit('join_queue', { name: currentUser.username });
   document.getElementById('waiting-status').textContent = 'Rakip aranıyor...';
   showScreen('screen-waiting');
+  if (socket.connected) {
+    socket.emit('join_queue', { name: currentUser.username });
+  }
+  socket.connect();
 }
 
 function bindWaitingEvents() {
@@ -404,6 +406,15 @@ function bindWaitingEvents() {
 }
 
 // ─── Socket olayları ─────────────────────────────────────────
+
+socket.on('connect', () => {
+  if (mode === 'multi' && currentUser) {
+    const waiting = document.getElementById('screen-waiting');
+    if (waiting && waiting.classList.contains('active')) {
+      socket.emit('join_queue', { name: currentUser.username });
+    }
+  }
+});
 
 socket.on('queued', () => {
   document.getElementById('waiting-status').textContent = 'Sırada bekleniyor...';
