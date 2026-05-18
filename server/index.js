@@ -224,7 +224,7 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 3000;
 const WORDS_PATH = path.join(__dirname, '../data/words.json');
 
-async function checkTDK(word) {
+async function checkTDK(word, withMeanings = false) {
   return new Promise(resolve => {
     const req = https.request({
       hostname: 'sozluk.gov.tr',
@@ -237,12 +237,21 @@ async function checkTDK(word) {
       res.on('end', () => {
         try {
           const json = JSON.parse(data);
-          resolve(Array.isArray(json) && json.length > 0);
-        } catch { resolve(false); }
+          const found = Array.isArray(json) && json.length > 0;
+          if (!withMeanings) return resolve(found);
+          if (!found) return resolve(null);
+          const meanings = json.flatMap(entry =>
+            (entry.anlam_icerik || []).map(a => {
+              const ozellik = (a.ozellik_icerik || []).map(o => o.tam_adi).filter(Boolean).join(', ');
+              return ozellik ? `(${ozellik}) ${a.anlam}` : a.anlam;
+            })
+          ).filter(Boolean).slice(0, 5);
+          resolve({ word, meanings });
+        } catch { resolve(withMeanings ? null : false); }
       });
     });
-    req.on('error', () => resolve(false));
-    req.setTimeout(5000, () => { req.destroy(); resolve(false); });
+    req.on('error', () => resolve(withMeanings ? null : false));
+    req.setTimeout(5000, () => { req.destroy(); resolve(withMeanings ? null : false); });
     req.end();
   });
 }
@@ -375,6 +384,7 @@ app.get('/admin', requireAdmin, (req, res) => {
   <div class="tab-bar">
     <button class="tab active" onclick="switchTab('homophones')">Sesteş Kelimeler</button>
     <button class="tab" onclick="switchTab('disputes')">İtirazlar <span id="pending-badge" hidden>0</span></button>
+    <button class="tab" onclick="switchTab('blacklist')">Kara Liste</button>
   </div>
 
   <!-- Sesteş Kelimeler -->
@@ -403,6 +413,24 @@ app.get('/admin', requireAdmin, (req, res) => {
     <div class="card" id="disputes-card">
       <div class="empty" id="disputes-loading">Yükleniyor...</div>
       <div id="disputes-list" hidden></div>
+    </div>
+  </div>
+
+  <!-- Kara Liste -->
+  <div id="tab-blacklist" class="section">
+    <p class="hint">Buradaki kelimeler oyunda geçersiz sayılır — oyuncular yazsa bile puan alamaz.</p>
+    <div class="card">
+      <form class="add-form" id="add-bl-form">
+        <input id="new-bl" placeholder="Yasaklı kelime ekle" autocomplete="off">
+        <button type="submit" class="btn-add">Ekle</button>
+      </form>
+      <div id="bl-list">
+        ${(readWords().blacklist || []).sort((a,b)=>a.localeCompare(b,'tr')).map(w => `
+        <div class="word-row" id="bl-row-${w}">
+          <span class="word-text">${w}</span>
+          <button class="btn-del" onclick="delBL('${w}')">✕ Kaldır</button>
+        </div>`).join('') || '<div class="empty">Kara liste boş.</div>'}
+      </div>
     </div>
   </div>
 
@@ -503,6 +531,35 @@ app.get('/admin', requireAdmin, (req, res) => {
       const b = document.getElementById('pending-badge');
       b.hidden = n===0; b.textContent = n;
     });
+
+    /* ── Kara Liste ── */
+    document.getElementById('add-bl-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const word = document.getElementById('new-bl').value.trim().toLocaleLowerCase('tr-TR');
+      if (!word) return;
+      const res = await fetch('/api/admin/blacklist', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({word})
+      });
+      const d = await res.json();
+      if (d.ok) {
+        showMsg('"' + word + '" kara listeye eklendi.', true);
+        document.getElementById('new-bl').value = '';
+        const list = document.getElementById('bl-list');
+        list.querySelector('.empty')?.remove();
+        const row = document.createElement('div');
+        row.className = 'word-row'; row.id = 'bl-row-' + word;
+        row.innerHTML = '<span class="word-text">'+word+'</span>'+
+          '<button class="btn-del" onclick="delBL(\\''+word+'\\')">✕ Kaldır</button>';
+        list.appendChild(row);
+      } else { showMsg(d.error||'Hata.', false); }
+    };
+
+    async function delBL(word) {
+      const res = await fetch('/api/admin/blacklist/'+encodeURIComponent(word), {method:'DELETE'});
+      const d = await res.json();
+      if (d.ok) { document.getElementById('bl-row-'+word)?.remove(); showMsg('"'+word+'" kaldırıldı.', true); }
+      else showMsg(d.error||'Hata.', false);
+    }
   </script>
 </body></html>`);
 });
@@ -528,6 +585,41 @@ app.delete('/api/admin/homophones/:word', requireAdmin, (req, res) => {
   data.homophones = (data.homophones || []).filter(w => w !== word);
   writeWords(data);
   res.json({ ok: true });
+});
+
+// ─── Admin API: kara liste ───────────────────────────────────
+
+app.post('/api/admin/blacklist', requireAdmin, (req, res) => {
+  const { word } = req.body;
+  if (!word || typeof word !== 'string') return res.json({ ok: false, error: 'Geçersiz kelime.' });
+  const normalized = word.trim().toLocaleLowerCase('tr-TR');
+  if (!normalized) return res.json({ ok: false, error: 'Boş kelime.' });
+  const data = readWords();
+  data.blacklist = data.blacklist || [];
+  if (data.blacklist.includes(normalized)) return res.json({ ok: false, error: 'Zaten listede.' });
+  data.blacklist.push(normalized);
+  writeWords(data);
+  _blacklistSet.add(normalized);
+  res.json({ ok: true });
+});
+
+app.delete('/api/admin/blacklist/:word', requireAdmin, (req, res) => {
+  const word = decodeURIComponent(req.params.word).toLocaleLowerCase('tr-TR');
+  const data = readWords();
+  data.blacklist = (data.blacklist || []).filter(w => w !== word);
+  writeWords(data);
+  _blacklistSet.delete(word);
+  res.json({ ok: true });
+});
+
+// ─── Anlam API ────────────────────────────────────────────────
+
+app.get('/api/meaning/:word', async (req, res) => {
+  const word = req.params.word.toLocaleLowerCase('tr-TR');
+  if (_meaningCache.has(word)) return res.json(_meaningCache.get(word));
+  const found = await checkTDK(word, true);
+  _meaningCache.set(word, found);
+  res.json(found);
 });
 
 // ─── İtiraz API: listele ──────────────────────────────────────
@@ -738,8 +830,12 @@ app.post('/api/auth/reset-password', async (req, res) => {
 
 // Sözlük sunucu tarafı doğrulama için belleğe alınır
 const _dictData = readWords();
-const _wordSet = new Set(_dictData.words.map(w => w.toLocaleLowerCase('tr-TR')));
+const _wordSet      = new Set(_dictData.words.map(w => w.toLocaleLowerCase('tr-TR')));
 const _homophoneSet = new Set((_dictData.homophones || []).map(w => w.toLocaleLowerCase('tr-TR')));
+const _blacklistSet = new Set((_dictData.blacklist  || []).map(w => w.toLocaleLowerCase('tr-TR')));
+
+// TDK anlam önbelleği (bellek içi)
+const _meaningCache = new Map();
 
 const queue = [];                   // { socket, name }[]
 const rooms = new Map();            // roomId → room
@@ -887,7 +983,7 @@ function validateWord(room, pIdx, rawWord) {
   for (const ch in need) {
     if ((mc[ch] || 0) < need[ch]) return { status: 'invalid', word: wordU, points: 0 };
   }
-  if (!_wordSet.has(wordL)) return { status: 'invalid', word: wordU, points: 0 };
+  if (!_wordSet.has(wordL) || _blacklistSet.has(wordL)) return { status: 'invalid', word: wordU, points: 0 };
   const pw = room.words[pIdx];
   const cnt = pw.filter(w => w.word === wordU).length;
   const max = _homophoneSet.has(wordL) ? 2 : 1;

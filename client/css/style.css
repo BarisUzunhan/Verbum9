@@ -1262,6 +1262,18 @@ html, body {
   border-left-color: var(--text-dim);
 }
 
+/* ── ANLAM POP-UP ────────────────────────── */
+
+.meaning-popup { position:fixed;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;padding:16px; }
+.meaning-popup[hidden] { display:none; }
+.meaning-backdrop { position:absolute;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px); }
+.meaning-content { position:relative;background:var(--surface);border-radius:16px;padding:28px 24px 24px;max-width:420px;width:100%;z-index:1;max-height:80vh;overflow-y:auto; }
+.meaning-word { font-size:1.3rem;font-weight:700;color:var(--accent2);margin-bottom:12px;text-transform:uppercase;letter-spacing:1px; }
+.meaning-body ol { padding-left:18px; }
+.meaning-body li { color:var(--text-dim);font-size:.9rem;line-height:1.6;margin-bottom:6px; }
+.meaning-body .no-meaning { color:var(--text-dim);font-size:.9rem; }
+.word-meaning-btn { background:none;border:none;cursor:pointer;padding:0;color:inherit;font:inherit;text-decoration:underline dotted;text-underline-offset:3px; }
+
 /* ── PROFİL POP-UP ───────────────────────── */
 
 .profile-popup {

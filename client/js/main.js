@@ -959,7 +959,11 @@ function renderResultMulti(players, missedWords = []) {
       const li = document.createElement('li');
       const isCommon = commonSet.has(word.toLocaleLowerCase('tr-TR'));
       li.className = isCommon ? 'valid common' : 'valid';
-      li.appendChild(document.createTextNode(word));
+      const wordBtn = document.createElement('button');
+      wordBtn.className = 'word-meaning-btn';
+      wordBtn.textContent = word;
+      wordBtn.addEventListener('click', () => showMeaning(word));
+      li.appendChild(wordBtn);
       const pts = document.createElement('span');
       pts.className = 'word-points';
       pts.textContent = isCommon ? '=' : `+${points}`;
@@ -1389,6 +1393,36 @@ function openProfile() {
 function closeProfile() {
   document.getElementById('profile-popup').hidden = true;
 }
+
+// ─── Anlam Popup ─────────────────────────────────────────────
+
+async function showMeaning(word) {
+  const popup = document.getElementById('meaning-popup');
+  const wordEl = document.getElementById('meaning-word');
+  const bodyEl = document.getElementById('meaning-body');
+  wordEl.textContent = word;
+  bodyEl.innerHTML = '<div class="no-meaning">Yükleniyor...</div>';
+  popup.hidden = false;
+
+  try {
+    const res = await fetch(`/api/meaning/${encodeURIComponent(word.toLowerCase())}`);
+    const data = await res.json();
+    if (data && data.meanings && data.meanings.length > 0) {
+      bodyEl.innerHTML = '<ol>' + data.meanings.map(m => `<li>${m}</li>`).join('') + '</ol>';
+    } else {
+      bodyEl.innerHTML = '<div class="no-meaning">TDK sözlüğünde tanım bulunamadı.</div>';
+    }
+  } catch {
+    bodyEl.innerHTML = '<div class="no-meaning">Anlam yüklenemedi.</div>';
+  }
+}
+
+function closeMeaning() {
+  document.getElementById('meaning-popup').hidden = true;
+}
+
+document.getElementById('btn-close-meaning').addEventListener('click', closeMeaning);
+document.getElementById('meaning-backdrop').addEventListener('click', closeMeaning);
 
 function bindProfile() {
   document.getElementById('profile-backdrop').addEventListener('click', closeProfile);
