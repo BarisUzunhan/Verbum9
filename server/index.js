@@ -224,6 +224,18 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 3000;
 const WORDS_PATH = path.join(__dirname, '../data/words.json');
 
+function requireAdmin(req, res, next) {
+  const adminPass = process.env.ADMIN_PASSWORD;
+  if (!adminPass) return next(); // şifre tanımlanmamışsa geç
+  const auth = req.headers['authorization'] || '';
+  const b64 = auth.replace('Basic ', '');
+  const decoded = Buffer.from(b64, 'base64').toString('utf8');
+  const password = decoded.split(':').slice(1).join(':');
+  if (password === adminPass) return next();
+  res.set('WWW-Authenticate', 'Basic realm="Verbum9 Admin"');
+  res.status(401).send('Yetkisiz erişim.');
+}
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../client')));
 // /data → sadece words.json erişilebilir, users.json hariç
@@ -251,7 +263,7 @@ function getLocalIP() {
 
 // ─── Sözlük arama sayfası ─────────────────────────────────────
 
-app.get('/sozluk', (req, res) => {
+app.get('/sozluk', requireAdmin, (req, res) => {
   const data = readWords();
   const sorted = [...data.words].sort((a, b) => a.localeCompare(b, 'tr'));
   res.send(`<!DOCTYPE html>
@@ -290,7 +302,7 @@ app.get('/sozluk', (req, res) => {
 
 // ─── Admin paneli ─────────────────────────────────────────────
 
-app.get('/admin', (req, res) => {
+app.get('/admin', requireAdmin, (req, res) => {
   const data = readWords();
   const homophones = (data.homophones || []).sort((a, b) => a.localeCompare(b, 'tr'));
   res.send(`<!DOCTYPE html>
@@ -474,7 +486,7 @@ app.get('/admin', (req, res) => {
 
 // ─── Admin API: sesteş ekle / sil ────────────────────────────
 
-app.post('/api/admin/homophones', (req, res) => {
+app.post('/api/admin/homophones', requireAdmin, (req, res) => {
   const { word } = req.body;
   if (!word || typeof word !== 'string') return res.json({ ok: false, error: 'Geçersiz kelime.' });
   const normalized = word.trim().toLocaleLowerCase('tr-TR');
@@ -487,7 +499,7 @@ app.post('/api/admin/homophones', (req, res) => {
   res.json({ ok: true });
 });
 
-app.delete('/api/admin/homophones/:word', (req, res) => {
+app.delete('/api/admin/homophones/:word', requireAdmin, (req, res) => {
   const word = decodeURIComponent(req.params.word).toLocaleLowerCase('tr-TR');
   const data = readWords();
   data.homophones = (data.homophones || []).filter(w => w !== word);
@@ -525,7 +537,7 @@ app.post('/api/disputes', async (req, res) => {
 
 // ─── İtiraz API: onayla / reddet ─────────────────────────────
 
-app.patch('/api/disputes/:id', async (req, res) => {
+app.patch('/api/disputes/:id', requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id);
   const { action } = req.body;
   if (!['approve', 'reject'].includes(action)) return res.json({ ok: false, error: 'Geçersiz işlem.' });
