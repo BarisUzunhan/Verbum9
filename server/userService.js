@@ -131,11 +131,15 @@ async function getUserByEmail(email) {
   const emailNorm = email.trim().toLowerCase();
   const { data } = await supabase.from('users').select('*');
   if (!data) return null;
+  let fallback = null;
   for (const row of data) {
     const decrypted = decryptEmail(row.email);
-    if (decrypted && decrypted.toLowerCase() === emailNorm) return fromDB(row);
+    if (decrypted && decrypted.toLowerCase() === emailNorm) {
+      if (row.email_verified) return fromDB(row);
+      fallback = row;
+    }
   }
-  return null;
+  return fromDB(fallback);
 }
 
 async function resetPassword(token, newPasswordHash) {

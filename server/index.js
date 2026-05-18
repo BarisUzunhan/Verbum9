@@ -562,6 +562,9 @@ app.post('/api/auth/register', async (req, res) => {
     const existing = await userService.getUserByUsername(username);
     if (existing) return res.json({ ok: false, error: 'Bu kullanıcı adı alınmış.' });
 
+    const existingEmail = await userService.getUserByEmail(email.trim().toLowerCase());
+    if (existingEmail) return res.json({ ok: false, error: 'Bu e-posta adresi zaten kayıtlı.' });
+
     const verificationToken = crypto.randomBytes(32).toString('hex');
     const user = {
       id: Date.now(),
