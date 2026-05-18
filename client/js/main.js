@@ -1268,7 +1268,7 @@ async function disputeWord(word, btn) {
     });
     const data = await res.json().catch(() => ({}));
     if (data.ok) {
-      btn.textContent = data.autoApproved ? '✓ TDK onayladı' : '✓ İtiraz edildi';
+      btn.textContent = '✓ İtiraz edildi';
     } else {
       btn.textContent = data.error || 'Hata';
       btn.disabled = false;

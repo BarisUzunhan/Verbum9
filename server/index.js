@@ -553,24 +553,26 @@ app.post('/api/disputes', async (req, res) => {
   if (existing?.status === 'pending')  return res.json({ ok: false, error: 'Bu kelime zaten itirazda.' });
   if (existing?.status === 'rejected') return res.json({ ok: false, error: 'Bu kelime daha önce incelendi ve reddedildi.' });
 
-  // TDK'da varsa otomatik onayla
-  const inTDK = await checkTDK(normalized);
-  if (inTDK) {
-    const id = Date.now();
-    await supabase.from('disputes').insert({ id, word: normalized, status: 'approved', resolved_at: new Date().toISOString() });
+  // Yanıtı hemen gönder, oyuncu beklemez
+  const id = Date.now();
+  const { error } = await supabase.from('disputes').insert({ id, word: normalized, status: 'pending' });
+  if (error) return res.json({ ok: false, error: 'Kayıt hatası.' });
+  res.json({ ok: true, id });
+
+  // TDK kontrolü arka planda — yanıt zaten gönderildi
+  checkTDK(normalized).then(async inTDK => {
+    if (!inTDK) return;
+    await supabase.from('disputes')
+      .update({ status: 'approved', resolved_at: new Date().toISOString() })
+      .eq('id', id);
     const dictData = readWords();
     if (!dictData.words.includes(normalized)) {
       dictData.words.push(normalized);
       writeWords(dictData);
       _wordSet.add(normalized);
     }
-    return res.json({ ok: true, autoApproved: true });
-  }
-
-  const id = Date.now();
-  const { error } = await supabase.from('disputes').insert({ id, word: normalized, status: 'pending' });
-  if (error) return res.json({ ok: false, error: 'Kayıt hatası.' });
-  res.json({ ok: true, id });
+    console.log(`[TDK] "${normalized}" otomatik onaylandı.`);
+  }).catch(err => console.error('[TDK]', err));
 });
 
 // ─── İtiraz API: onayla / reddet ─────────────────────────────
