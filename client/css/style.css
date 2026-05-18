@@ -84,7 +84,7 @@ html, body {
 }
 
 .auth-logo {
-  font-size: clamp(1.8rem, 7vw, 2.8rem);
+  font-size: clamp(1.3rem, 5vw, 1.8rem);
   font-weight: 900;
   letter-spacing: -2px;
   line-height: 1;
@@ -294,15 +294,6 @@ html, body {
   font-size: 0.9rem;
 }
 
-.lobby-user-email,
-.lobby-user-date {
-  font-size: 0.7rem;
-  color: var(--text-dim);
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 .level-badge {
   font-size: 0.7rem;
@@ -1344,6 +1335,12 @@ html, body {
 .profile-username {
   font-size: 1.3rem;
   font-weight: 700;
+}
+
+.profile-meta {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  margin-top: 2px;
 }
 
 .profile-level-text {
