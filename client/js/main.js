@@ -1266,11 +1266,11 @@ async function disputeWord(word, btn) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ word }),
     });
-    if (res.ok) {
-      btn.textContent = '✓ İtiraz edildi';
+    const data = await res.json().catch(() => ({}));
+    if (data.ok) {
+      btn.textContent = data.autoApproved ? '✓ TDK onayladı' : '✓ İtiraz edildi';
     } else {
-      const data = await res.json().catch(() => ({}));
-      btn.textContent = data.error === 'Bu kelime zaten itirazda.' ? '✓ Zaten itiraz var' : 'Hata';
+      btn.textContent = data.error || 'Hata';
       btn.disabled = false;
     }
   } catch {

@@ -224,6 +224,29 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 3000;
 const WORDS_PATH = path.join(__dirname, '../data/words.json');
 
+async function checkTDK(word) {
+  return new Promise(resolve => {
+    const req = https.request({
+      hostname: 'sozluk.gov.tr',
+      path:     `/gts?ara=${encodeURIComponent(word)}`,
+      method:   'GET',
+      headers:  { 'User-Agent': 'Verbum9/1.0' },
+    }, res => {
+      let data = '';
+      res.on('data', d => data += d);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          resolve(Array.isArray(json) && json.length > 0);
+        } catch { resolve(false); }
+      });
+    });
+    req.on('error', () => resolve(false));
+    req.setTimeout(5000, () => { req.destroy(); resolve(false); });
+    req.end();
+  });
+}
+
 function requireAdmin(req, res, next) {
   const adminPass = process.env.ADMIN_PASSWORD;
   if (!adminPass) return next(); // şifre tanımlanmamışsa geç
@@ -529,6 +552,20 @@ app.post('/api/disputes', async (req, res) => {
     .from('disputes').select('id,status').eq('word', normalized).in('status', ['pending', 'rejected']).maybeSingle();
   if (existing?.status === 'pending')  return res.json({ ok: false, error: 'Bu kelime zaten itirazda.' });
   if (existing?.status === 'rejected') return res.json({ ok: false, error: 'Bu kelime daha önce incelendi ve reddedildi.' });
+
+  // TDK'da varsa otomatik onayla
+  const inTDK = await checkTDK(normalized);
+  if (inTDK) {
+    const id = Date.now();
+    await supabase.from('disputes').insert({ id, word: normalized, status: 'approved', resolved_at: new Date().toISOString() });
+    const dictData = readWords();
+    if (!dictData.words.includes(normalized)) {
+      dictData.words.push(normalized);
+      writeWords(dictData);
+      _wordSet.add(normalized);
+    }
+    return res.json({ ok: true, autoApproved: true });
+  }
 
   const id = Date.now();
   const { error } = await supabase.from('disputes').insert({ id, word: normalized, status: 'pending' });
