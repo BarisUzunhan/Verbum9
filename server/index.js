@@ -235,7 +235,6 @@ async function checkTDK(word, withMeanings = false) {
       let data = '';
       res.on('data', d => data += d);
       res.on('end', () => {
-        console.log(`[TDK-DEBUG] word=${word} status=${res.statusCode} body_start=${data.slice(0,200)}`);
         try {
           const json = JSON.parse(data);
           const found = Array.isArray(json) && json.length > 0;
@@ -248,7 +247,7 @@ async function checkTDK(word, withMeanings = false) {
             })
           ).filter(Boolean).slice(0, 5);
           resolve({ word, meanings });
-        } catch (e) { console.log(`[TDK-DEBUG] parse error: ${e.message}`); resolve(withMeanings ? null : false); }
+        } catch { resolve(withMeanings ? null : false); }
       });
     });
     req.on('error', () => resolve(withMeanings ? null : false));
@@ -618,9 +617,14 @@ app.delete('/api/admin/blacklist/:word', requireAdmin, (req, res) => {
 app.get('/api/meaning/:word', async (req, res) => {
   const word = req.params.word.toLocaleLowerCase('tr-TR');
   if (_meaningCache.has(word)) return res.json(_meaningCache.get(word));
-  const found = await checkTDK(word, true);
-  _meaningCache.set(word, found);
-  res.json(found);
+  const { data } = await supabase
+    .from('word_meanings')
+    .select('meanings')
+    .eq('word', word)
+    .maybeSingle();
+  const result = data ? { word, meanings: data.meanings } : null;
+  _meaningCache.set(word, result);
+  res.json(result);
 });
 
 // ─── İtiraz API: listele ──────────────────────────────────────
