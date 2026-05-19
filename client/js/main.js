@@ -1423,6 +1423,7 @@ function closeMeaning() {
 
 document.getElementById('btn-close-meaning').addEventListener('click', closeMeaning);
 document.getElementById('meaning-backdrop').addEventListener('click', closeMeaning);
+document.addEventListener('verbum:show-meaning', e => showMeaning(e.detail.word));
 
 function bindProfile() {
   document.getElementById('profile-backdrop').addEventListener('click', closeProfile);

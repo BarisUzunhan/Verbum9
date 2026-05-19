@@ -142,14 +142,20 @@ export function addWordToPanel(wordObj) {
   const li = document.createElement('li');
   li.className = wordObj.valid ? 'valid' : 'invalid';
 
-  li.appendChild(document.createTextNode(wordObj.word));
-
   if (wordObj.valid) {
+    const wordBtn = document.createElement('button');
+    wordBtn.className = 'word-meaning-btn';
+    wordBtn.textContent = wordObj.word;
+    wordBtn.addEventListener('click', () =>
+      document.dispatchEvent(new CustomEvent('verbum:show-meaning', { detail: { word: wordObj.word } }))
+    );
+    li.appendChild(wordBtn);
     const pts = document.createElement('span');
     pts.className = 'word-points';
     pts.textContent = `+${wordObj.points}`;
     li.appendChild(pts);
   } else {
+    li.appendChild(document.createTextNode(wordObj.word));
     const btn = document.createElement('button');
     btn.className = 'btn-dispute';
     btn.dataset.word = wordObj.word.toLocaleLowerCase('tr-TR');
@@ -171,13 +177,20 @@ export function renderResult(missedWords = []) {
   sorted.forEach(w => {
     const li = document.createElement('li');
     li.className = w.valid ? 'valid' : 'invalid';
-    li.appendChild(document.createTextNode(w.word));
     if (w.valid) {
+      const wordBtn = document.createElement('button');
+      wordBtn.className = 'word-meaning-btn';
+      wordBtn.textContent = w.word;
+      wordBtn.addEventListener('click', () =>
+        document.dispatchEvent(new CustomEvent('verbum:show-meaning', { detail: { word: w.word } }))
+      );
+      li.appendChild(wordBtn);
       const pts = document.createElement('span');
       pts.className = 'word-points';
       pts.textContent = `+${w.points}`;
       li.appendChild(pts);
     } else {
+      li.appendChild(document.createTextNode(w.word));
       const btn = document.createElement('button');
       btn.className = 'btn-dispute';
       btn.dataset.word = w.word.toLocaleLowerCase('tr-TR');
@@ -202,7 +215,13 @@ export function renderResult(missedWords = []) {
     display.forEach(word => {
       const li = document.createElement('li');
       li.className = 'valid';
-      li.appendChild(document.createTextNode(word));
+      const wordBtn = document.createElement('button');
+      wordBtn.className = 'word-meaning-btn';
+      wordBtn.textContent = word;
+      wordBtn.addEventListener('click', () =>
+        document.dispatchEvent(new CustomEvent('verbum:show-meaning', { detail: { word } }))
+      );
+      li.appendChild(wordBtn);
       const pts = document.createElement('span');
       pts.className = 'word-points';
       pts.textContent = word.length + ' harf';
