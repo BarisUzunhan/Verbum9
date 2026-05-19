@@ -85,6 +85,7 @@
             <span id="lobby-level" class="level-badge">Sv. 1</span>
           </div>
         </button>
+        <button id="btn-friends-lobby" class="btn-friends-icon" aria-label="Arkadaşlar" title="Arkadaşlar">👥</button>
         <button id="btn-settings-lobby" class="btn-settings-icon" aria-label="Ayarlar" title="Ayarlar">⚙</button>
       </div>
     </div>
@@ -270,6 +271,30 @@
     </div>
   </div>
 
+  <!-- EKRAN: Arkadaşlar -->
+  <div id="screen-friends" class="screen">
+    <div class="friends-header">
+      <button id="btn-friends-back" class="btn-nav-home">← Lobi</button>
+      <h2 class="friends-title">Arkadaşlar</h2>
+      <div style="width:80px"></div>
+    </div>
+    <div class="friends-body">
+      <div class="friends-search-bar">
+        <input id="friends-search-input" class="friends-search-input" placeholder="Kullanıcı adı ara..." autocomplete="off">
+        <button id="btn-friends-search" class="btn-friends-search">Ara</button>
+      </div>
+      <div id="friends-search-results" class="friends-section" hidden></div>
+      <div id="friends-requests-section" class="friends-section" hidden>
+        <div class="friends-section-title">Gelen İstekler <span id="friends-requests-badge" class="friends-badge"></span></div>
+        <div id="friends-requests-list"></div>
+      </div>
+      <div class="friends-section">
+        <div class="friends-section-title">Arkadaşlar <span id="friends-count-badge" class="friends-badge"></span></div>
+        <div id="friends-list"><div class="friends-empty">Henüz arkadaşın yok. Yukarıdan ara!</div></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Profil Pop-up (ekran değil, katman) -->
   <div id="profile-popup" class="profile-popup" hidden>
     <div class="profile-backdrop" id="profile-backdrop"></div>
@@ -385,6 +410,20 @@
       <div class="settings-row">
         <span class="settings-label">Yardım</span>
         <button id="btn-show-tutorial" class="btn-tutorial-settings">Tutorial Göster</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Oyun Daveti Popup -->
+  <div id="invite-popup" class="exit-confirm" hidden>
+    <div class="exit-confirm-backdrop"></div>
+    <div class="exit-confirm-content">
+      <div class="invite-icon">⚡</div>
+      <p class="exit-confirm-text"><strong id="invite-from-name"></strong> sizi oyuna davet etti!</p>
+      <div class="invite-countdown-bar"><div id="invite-countdown-fill" class="invite-countdown-fill"></div></div>
+      <div class="exit-confirm-actions">
+        <button id="btn-invite-accept" class="btn-primary">Kabul Et</button>
+        <button id="btn-invite-decline" class="btn-secondary">Reddet</button>
       </div>
     </div>
   </div>

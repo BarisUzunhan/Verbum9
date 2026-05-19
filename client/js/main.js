@@ -1436,6 +1436,166 @@ function bindProfile() {
   });
 }
 
+// ─── Arkadaşlar Ekranı ───────────────────────────────────────
+
+document.getElementById('btn-friends-lobby').addEventListener('click', openFriends);
+document.getElementById('btn-friends-back').addEventListener('click', () => showScreen('screen-lobby'));
+
+function openFriends() {
+  showScreen('screen-friends');
+  loadFriends();
+  loadFriendRequests();
+}
+
+async function loadFriends() {
+  const res = await fetch('/api/friends', { headers: { Authorization: 'Bearer ' + localStorage.getItem(TOKEN_KEY) } });
+  const friends = await res.json();
+  const list = document.getElementById('friends-list');
+  const badge = document.getElementById('friends-count-badge');
+  badge.textContent = friends.length || '';
+  badge.hidden = friends.length === 0;
+  if (friends.length === 0) {
+    list.innerHTML = '<div class="friends-empty">Henüz arkadaşın yok. Yukarıdan ara!</div>';
+    return;
+  }
+  list.innerHTML = friends.map(f => `
+    <div class="friend-row" id="friend-row-${f.friendshipId}">
+      <div class="friend-avatar">${f.username[0].toLocaleUpperCase('tr-TR')}${f.online ? '<div class="online-dot"></div>' : ''}</div>
+      <div class="friend-name">${f.username}<br><span class="${f.online ? 'friend-online-status' : 'friend-status'}">${f.online ? '● Çevrimiçi' : '○ Çevrimdışı'}</span></div>
+      <div class="friend-actions">
+        <button class="btn-friend-invite" ${!f.online ? 'disabled' : ''} onclick="inviteFriend(${f.userId}, '${f.username}')">⚡ Davet</button>
+        <button class="btn-friend-remove" onclick="removeFriend(${f.friendshipId})">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+async function loadFriendRequests() {
+  const res = await fetch('/api/friends/requests', { headers: { Authorization: 'Bearer ' + localStorage.getItem(TOKEN_KEY) } });
+  const requests = await res.json();
+  const section = document.getElementById('friends-requests-section');
+  const list = document.getElementById('friends-requests-list');
+  const badge = document.getElementById('friends-requests-badge');
+  if (requests.length === 0) { section.hidden = true; return; }
+  section.hidden = false;
+  badge.textContent = requests.length;
+  list.innerHTML = requests.map(r => `
+    <div class="friend-row" id="request-row-${r.id}">
+      <div class="friend-avatar">${r.username[0].toLocaleUpperCase('tr-TR')}</div>
+      <div class="friend-name">${r.username}</div>
+      <div class="friend-actions">
+        <button class="btn-friend-accept" onclick="respondRequest(${r.id}, true)">✓ Kabul</button>
+        <button class="btn-friend-reject" onclick="respondRequest(${r.id}, false)">✕ Reddet</button>
+      </div>
+    </div>`).join('');
+}
+
+async function searchFriends() {
+  const q = document.getElementById('friends-search-input').value.trim();
+  if (q.length < 2) return;
+  const res = await fetch('/api/friends/search?q=' + encodeURIComponent(q), { headers: { Authorization: 'Bearer ' + localStorage.getItem(TOKEN_KEY) } });
+  const results = await res.json();
+  const section = document.getElementById('friends-search-results');
+  section.hidden = false;
+  if (results.length === 0) { section.innerHTML = '<div class="friends-section-title">Arama Sonucu</div><div class="friends-empty">Kullanıcı bulunamadı.</div>'; return; }
+  section.innerHTML = '<div class="friends-section-title">Arama Sonucu</div>' + results.map(u => {
+    let actionBtn = '';
+    if (u.friendStatus === 'friends') actionBtn = '<button class="btn-friend-pending" disabled>Arkadaş ✓</button>';
+    else if (u.friendStatus === 'sent') actionBtn = '<button class="btn-friend-pending" disabled>İstek Gönderildi</button>';
+    else if (u.friendStatus === 'received') actionBtn = `<button class="btn-friend-accept" onclick="respondRequest(${u.friendshipId}, true)">✓ Kabul</button>`;
+    else actionBtn = `<button class="btn-friend-invite" onclick="sendFriendRequest('${u.username}', this)">+ İstek Gönder</button>`;
+    return `<div class="friend-row"><div class="friend-avatar">${u.username[0].toLocaleUpperCase('tr-TR')}</div><div class="friend-name">${u.username}</div><div class="friend-actions">${actionBtn}</div></div>`;
+  }).join('');
+}
+
+async function sendFriendRequest(username, btn) {
+  btn.disabled = true; btn.textContent = '...';
+  const res = await fetch('/api/friends/request', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + localStorage.getItem(TOKEN_KEY) },
+    body: JSON.stringify({ username })
+  });
+  const d = await res.json();
+  if (d.ok) { btn.textContent = 'İstek Gönderildi'; btn.className = 'btn-friend-pending'; }
+  else { btn.disabled = false; btn.textContent = '+ İstek Gönder'; showToast(d.error || 'Hata.'); }
+}
+
+async function respondRequest(id, accept) {
+  await fetch('/api/friends/' + id, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + localStorage.getItem(TOKEN_KEY) },
+    body: JSON.stringify({ accept })
+  });
+  document.getElementById('request-row-' + id)?.remove();
+  if (accept) { loadFriends(); loadFriendRequests(); }
+  else loadFriendRequests();
+}
+
+async function removeFriend(friendshipId) {
+  await fetch('/api/friends/' + friendshipId, { method: 'DELETE', headers: { Authorization: 'Bearer ' + localStorage.getItem(TOKEN_KEY) } });
+  document.getElementById('friend-row-' + friendshipId)?.remove();
+}
+
+document.getElementById('btn-friends-search').addEventListener('click', searchFriends);
+document.getElementById('friends-search-input').addEventListener('keydown', e => { if (e.key === 'Enter') searchFriends(); });
+
+function inviteFriend(userId, username) {
+  socket.emit('friend_invite', { toUserId: userId });
+  showToast(`${username} adlı oyuncuya davet gönderildi (30 sn)`);
+}
+
+// ─── Oyun Daveti (gelen) ─────────────────────────────────────
+
+let _inviteTimer = null;
+let _currentInviteId = null;
+
+socket.on('friend_invite_received', ({ inviteId, fromUsername }) => {
+  _currentInviteId = inviteId;
+  document.getElementById('invite-from-name').textContent = fromUsername;
+  document.getElementById('invite-popup').hidden = false;
+  const fill = document.getElementById('invite-countdown-fill');
+  fill.style.transition = 'none'; fill.style.width = '100%';
+  setTimeout(() => { fill.style.transition = 'width 30s linear'; fill.style.width = '0%'; }, 50);
+  clearTimeout(_inviteTimer);
+  _inviteTimer = setTimeout(() => {
+    document.getElementById('invite-popup').hidden = true;
+    _currentInviteId = null;
+  }, 30000);
+});
+
+document.getElementById('btn-invite-accept').addEventListener('click', () => {
+  if (!_currentInviteId) return;
+  socket.emit('friend_invite_response', { inviteId: _currentInviteId, accept: true });
+  document.getElementById('invite-popup').hidden = true;
+  clearTimeout(_inviteTimer); _currentInviteId = null;
+});
+
+document.getElementById('btn-invite-decline').addEventListener('click', () => {
+  if (!_currentInviteId) return;
+  socket.emit('friend_invite_response', { inviteId: _currentInviteId, accept: false });
+  document.getElementById('invite-popup').hidden = true;
+  clearTimeout(_inviteTimer); _currentInviteId = null;
+});
+
+socket.on('friend_invite_result', ({ ok, error, toUsername }) => {
+  if (!ok) showToast(error || 'Davet gönderilemedi.');
+});
+
+socket.on('friend_invite_declined', ({ username }) => {
+  showToast(`${username} daveti reddetti.`);
+});
+
+socket.on('friend_invite_expired', ({ toUsername }) => {
+  showToast(`${toUsername} davete yanıt vermedi.`);
+});
+
+socket.on('friend_request_received', ({ fromUsername }) => {
+  showToast(`${fromUsername} sana arkadaşlık isteği gönderdi.`, 6000);
+  if (document.getElementById('screen-friends').classList.contains('active')) loadFriendRequests();
+});
+
+socket.on('friend_request_accepted', ({ byUsername }) => {
+  showToast(`${byUsername} arkadaşlık isteğini kabul etti!`, 5000);
+  if (document.getElementById('screen-friends').classList.contains('active')) loadFriends();
+});
+
 // ─── Sekme kapanınca / sayfa yenilenince kasıtlı çıkış bildir ─
 
 window.addEventListener('beforeunload', () => {

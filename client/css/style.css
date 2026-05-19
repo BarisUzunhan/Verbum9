@@ -1820,3 +1820,228 @@ html, body {
   border-color: var(--accent);
   color: #fff;
 }
+
+/* ─── Arkadaşlar Ekranı ────────────────────────────────────── */
+
+.btn-friends-icon {
+  background: transparent;
+  border: none;
+  font-size: 1.3rem;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 8px;
+  transition: background .15s;
+}
+.btn-friends-icon:hover { background: rgba(255,255,255,.1); }
+
+#screen-friends {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.friends-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 8px;
+}
+
+.friends-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.friends-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 16px 24px;
+}
+
+.friends-search-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.friends-search-input {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid #333;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1rem;
+  outline: none;
+}
+.friends-search-input:focus { border-color: var(--accent); }
+
+.btn-friends-search {
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: .9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.friends-section { margin-bottom: 20px; }
+
+.friends-section-title {
+  font-size: .78rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.friends-badge {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 10px;
+  font-size: .7rem;
+  padding: 1px 7px;
+  font-weight: 700;
+}
+
+.friend-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface);
+  margin-bottom: 6px;
+}
+
+.friend-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.online-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #06d6a0;
+  border: 2px solid var(--bg);
+}
+
+.friend-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: .95rem;
+}
+
+.friend-status {
+  font-size: .75rem;
+  color: var(--text-dim);
+}
+
+.friend-online-status {
+  font-size: .75rem;
+  color: #06d6a0;
+}
+
+.friend-actions { display: flex; gap: 6px; }
+
+.btn-friend-invite {
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: .8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-friend-invite:disabled {
+  background: #333;
+  color: var(--text-dim);
+  cursor: default;
+}
+
+.btn-friend-accept {
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: none;
+  background: #06d6a0;
+  color: #000;
+  font-size: .8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-friend-reject, .btn-friend-remove {
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid #444;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: .8rem;
+  cursor: pointer;
+}
+.btn-friend-reject:hover, .btn-friend-remove:hover { border-color: var(--accent); color: var(--accent); }
+
+.btn-friend-pending {
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid #444;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: .8rem;
+  cursor: default;
+}
+
+.friends-empty {
+  color: var(--text-dim);
+  font-size: .9rem;
+  padding: 12px 0;
+  text-align: center;
+}
+
+/* ─── Davet Popup ───────────────────────────────────────────── */
+
+.invite-icon {
+  font-size: 2rem;
+  margin-bottom: 8px;
+}
+
+.invite-countdown-bar {
+  width: 100%;
+  height: 4px;
+  background: #333;
+  border-radius: 2px;
+  margin: 12px 0;
+  overflow: hidden;
+}
+
+.invite-countdown-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  width: 100%;
+  transition: width 1s linear;
+}

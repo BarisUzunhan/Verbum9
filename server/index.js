@@ -268,6 +268,15 @@ function requireAdmin(req, res, next) {
   res.status(401).send('Yetkisiz erişim.');
 }
 
+async function requireAuth(req, res, next) {
+  const token = extractToken(req);
+  if (!token) return res.status(401).json({ ok: false, error: 'Giriş gerekli.' });
+  const user = await userService.getUserByToken(token);
+  if (!user) return res.status(401).json({ ok: false, error: 'Geçersiz token.' });
+  req.user = user;
+  next();
+}
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../client')));
 // /data → sadece words.json erişilebilir, users.json hariç
@@ -916,6 +925,92 @@ app.post('/api/auth/reset-password', async (req, res) => {
   }
 });
 
+// ─── Arkadaşlar API ──────────────────────────────────────────
+
+app.get('/api/friends/search', requireAuth, async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (q.length < 2) return res.json([]);
+  const { data: users } = await supabase
+    .from('users').select('id, username').ilike('username', `%${q}%`).neq('id', req.user.id).limit(8);
+  if (!users || users.length === 0) return res.json([]);
+  const results = await Promise.all(users.map(async u => {
+    const { data: fs } = await supabase.from('friendships').select('id, status, requester_id')
+      .or(`and(requester_id.eq.${req.user.id},addressee_id.eq.${u.id}),and(requester_id.eq.${u.id},addressee_id.eq.${req.user.id})`)
+      .maybeSingle();
+    let friendStatus = 'none';
+    if (fs) {
+      if (fs.status === 'accepted') friendStatus = 'friends';
+      else if (fs.status === 'pending') friendStatus = fs.requester_id === req.user.id ? 'sent' : 'received';
+    }
+    return { id: u.id, username: u.username, friendStatus, friendshipId: fs?.id || null };
+  }));
+  res.json(results);
+});
+
+app.get('/api/friends', requireAuth, async (req, res) => {
+  const uid = req.user.id;
+  const { data } = await supabase.from('friendships').select('id, requester_id, addressee_id')
+    .eq('status', 'accepted').or(`requester_id.eq.${uid},addressee_id.eq.${uid}`);
+  if (!data || data.length === 0) return res.json([]);
+  const friendIds = data.map(f => f.requester_id === uid ? f.addressee_id : f.requester_id);
+  const { data: users } = await supabase.from('users').select('id, username').in('id', friendIds);
+  const userMap = {}; (users || []).forEach(u => userMap[u.id] = u.username);
+  res.json(data.map(f => {
+    const fid = f.requester_id === uid ? f.addressee_id : f.requester_id;
+    return { friendshipId: f.id, userId: fid, username: userMap[fid] || '?', online: onlineUsers.has(fid) };
+  }));
+});
+
+app.get('/api/friends/requests', requireAuth, async (req, res) => {
+  const { data } = await supabase.from('friendships').select('id, requester_id, created_at')
+    .eq('addressee_id', req.user.id).eq('status', 'pending');
+  if (!data || data.length === 0) return res.json([]);
+  const ids = data.map(f => f.requester_id);
+  const { data: users } = await supabase.from('users').select('id, username').in('id', ids);
+  const userMap = {}; (users || []).forEach(u => userMap[u.id] = u.username);
+  res.json(data.map(f => ({ id: f.id, userId: f.requester_id, username: userMap[f.requester_id] || '?', createdAt: f.created_at })));
+});
+
+app.post('/api/friends/request', requireAuth, async (req, res) => {
+  const { username } = req.body;
+  if (!username) return res.json({ ok: false, error: 'Kullanıcı adı gerekli.' });
+  const { data: found } = await supabase.from('users').select('id, username').ilike('username', username).limit(1);
+  const target = found?.[0];
+  if (!target) return res.json({ ok: false, error: 'Kullanıcı bulunamadı.' });
+  if (target.id === req.user.id) return res.json({ ok: false, error: 'Kendinize istek gönderemezsiniz.' });
+  const { data: existing } = await supabase.from('friendships').select('id, status')
+    .or(`and(requester_id.eq.${req.user.id},addressee_id.eq.${target.id}),and(requester_id.eq.${target.id},addressee_id.eq.${req.user.id})`)
+    .maybeSingle();
+  if (existing?.status === 'accepted') return res.json({ ok: false, error: 'Zaten arkadaşsınız.' });
+  if (existing?.status === 'pending') return res.json({ ok: false, error: 'İstek zaten bekliyor.' });
+  const { error } = await supabase.from('friendships').insert({ requester_id: req.user.id, addressee_id: target.id });
+  if (error) return res.json({ ok: false, error: 'Hata oluştu.' });
+  const t = onlineUsers.get(target.id);
+  if (t) t.socket.emit('friend_request_received', { fromUsername: req.user.username });
+  res.json({ ok: true, username: target.username });
+});
+
+app.patch('/api/friends/:id', requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { accept } = req.body;
+  const { data: fs } = await supabase.from('friendships').select('*')
+    .eq('id', id).eq('addressee_id', req.user.id).maybeSingle();
+  if (!fs) return res.json({ ok: false, error: 'İstek bulunamadı.' });
+  await supabase.from('friendships').update({ status: accept ? 'accepted' : 'rejected' }).eq('id', id);
+  if (accept) {
+    const t = onlineUsers.get(fs.requester_id);
+    if (t) t.socket.emit('friend_request_accepted', { byUsername: req.user.username });
+  }
+  res.json({ ok: true });
+});
+
+app.delete('/api/friends/:id', requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id);
+  await supabase.from('friendships').delete().eq('id', id)
+    .or(`requester_id.eq.${req.user.id},addressee_id.eq.${req.user.id}`);
+  res.json({ ok: true });
+});
+
 // ─── Socket.IO — Çok Oyunculu Motor ─────────────────────────
 
 // Sözlük sunucu tarafı doğrulama için belleğe alınır
@@ -932,6 +1027,8 @@ const rooms = new Map();            // roomId → room
 const socketRoom = new Map();       // socketId → roomId
 const pendingReconnects = new Map(); // token → { roomId, playerIndex }
 const finishedGames = new Map();    // token → { result, expiresAt } — ekran kapalıyken biten oyunlar için
+const onlineUsers = new Map();      // userId → { socket, name }
+const pendingInvites = new Map();   // inviteId → { fromSocket, fromName, fromToken, toUserId }
 
 // 1 dakikada bir süresi dolmuş sonuçları temizle
 setInterval(() => {
@@ -1096,6 +1193,49 @@ function closeRoom(socket) {
 
 io.on('connection', socket => {
   const authToken = socket.handshake.auth?.token;
+
+  // Online kullanıcı kaydı
+  if (authToken) {
+    userService.getUserByToken(authToken).then(user => {
+      if (user) { onlineUsers.set(user.id, { socket, name: user.username }); socket._userId = user.id; }
+    });
+  }
+
+  // ─── Arkadaş Oyun Daveti ────────────────────────────────────
+  socket.on('friend_invite', async ({ toUserId }) => {
+    if (socketRoom.has(socket.id)) return socket.emit('friend_invite_result', { ok: false, error: 'Zaten bir oyundasınız.' });
+    const fromUser = await userService.getUserByToken(authToken);
+    if (!fromUser) return;
+    const target = onlineUsers.get(toUserId);
+    if (!target) return socket.emit('friend_invite_result', { ok: false, error: 'Arkadaş şu an çevrimiçi değil.' });
+    if (socketRoom.has(target.socket.id)) return socket.emit('friend_invite_result', { ok: false, error: 'Arkadaş şu an başka bir oyunda.' });
+    const inviteId = Date.now();
+    pendingInvites.set(inviteId, { fromSocket: socket, fromName: fromUser.username, fromToken: authToken, toUserId });
+    target.socket.emit('friend_invite_received', { inviteId, fromUsername: fromUser.username });
+    socket.emit('friend_invite_result', { ok: true, inviteId, toUsername: target.name });
+    setTimeout(() => {
+      if (!pendingInvites.has(inviteId)) return;
+      pendingInvites.delete(inviteId);
+      try { socket.emit('friend_invite_expired', { toUsername: target.name }); } catch {}
+    }, 30000);
+  });
+
+  socket.on('friend_invite_response', async ({ inviteId, accept }) => {
+    const invite = pendingInvites.get(inviteId);
+    if (!invite) return;
+    pendingInvites.delete(inviteId);
+    if (!accept) {
+      try { invite.fromSocket.emit('friend_invite_declined', { username: authToken ? (await userService.getUserByToken(authToken))?.username : '?' }); } catch {}
+      return;
+    }
+    const fromUser = await userService.getUserByToken(invite.fromToken);
+    const toUser   = await userService.getUserByToken(authToken);
+    if (!fromUser || !toUser) return;
+    createRoom(
+      { socket: invite.fromSocket, name: fromUser.username, token: invite.fromToken },
+      { socket, name: toUser.username, token: authToken }
+    );
+  });
 
   // Ekran kapalıyken biten oyun var mı? — önce bunu kontrol et
   if (authToken && finishedGames.has(authToken)) {
@@ -1317,6 +1457,7 @@ io.on('connection', socket => {
   });
 
   socket.on('disconnect', () => {
+    if (socket._userId) onlineUsers.delete(socket._userId);
     // Kuyruktan çıkar
     const qi = queue.findIndex(p => p.socket.id === socket.id);
     if (qi !== -1) queue.splice(qi, 1);
