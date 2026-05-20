@@ -2122,6 +2122,88 @@ html, body {
   line-height: 1.5;
 }
 
+/* ─── Günlük Mod ─── */
+.daily-lobby-body {
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 480px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.daily-yesterday-box {
+  background: var(--surface2);
+  border-radius: 12px;
+  padding: 14px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.daily-yesterday-title { font-size: 0.82rem; color: var(--text-dim); }
+.daily-yesterday-stats { display: flex; gap: 12px; align-items: center; }
+.daily-yst-rank { font-weight: 700; font-size: 1rem; }
+.daily-yst-kl { color: #f5c518; font-weight: 700; font-size: 0.95rem; }
+
+.daily-info-card {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.daily-info-icon { font-size: 2.5rem; }
+.daily-played-icon { font-size: 2.5rem; color: #4cc9f0; }
+.daily-info-title { font-size: 1.1rem; font-weight: 700; }
+.daily-info-desc { color: var(--text-dim); font-size: 0.88rem; line-height: 1.6; }
+.daily-played-score { color: var(--text-dim); font-size: 0.95rem; }
+.daily-played-score strong { color: var(--text); font-size: 1.2rem; }
+
+.daily-info-prizes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.daily-prize {
+  background: var(--surface2);
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.daily-start-btn {
+  width: 100%;
+  padding: 14px;
+  font-size: 1rem;
+}
+
+.daily-rank-box {
+  background: var(--surface2);
+  border-radius: 12px;
+  padding: 14px 20px;
+  text-align: center;
+  width: 100%;
+}
+
+.daily-rank-label { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 4px; }
+.daily-rank-number { font-size: 2rem; font-weight: 800; color: #f5c518; }
+.daily-rank-note { font-size: 0.75rem; color: var(--text-dim); margin-top: 6px; line-height: 1.4; }
+
+#daily-result-banner {
+  margin: 12px 0;
+  padding: 0 16px;
+}
+
 .modal-error {
   color: var(--danger, #e94560);
   font-size: 0.83rem;

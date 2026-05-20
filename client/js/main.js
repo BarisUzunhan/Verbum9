@@ -26,7 +26,7 @@ let currentUser = null;
 
 // ─── Çok oyunculu durum ───────────────────────────────────────
 
-let mode = 'solo'; // 'solo' | 'multi'
+let mode = 'solo'; // 'solo' | 'multi' | 'daily'
 const mp = { playerIndex: -1, turnIndex: -1, opponentName: '', myScore: 0, invalidWords: [] };
 
 // io global olarak /socket.io/socket.io.js tarafından yüklenir
@@ -497,6 +497,7 @@ function bindLobbyEvents() {
   document.getElementById('btn-profile').addEventListener('click', openProfile);
   document.getElementById('mode-solo').addEventListener('click', goToFill);
   document.getElementById('mode-1v1').addEventListener('click', goToOnline);
+  document.getElementById('mode-daily').addEventListener('click', goToDailyLobby);
 }
 
 function renderLobby() {
@@ -530,6 +531,97 @@ function goToFill() {
   bindFillEvents();
   showScreen('screen-fill');
   setTimeout(() => startFill(), 100);
+}
+
+// ─── Günlük Mod ───────────────────────────────────────────────
+
+async function goToDailyLobby() {
+  showScreen('screen-daily-lobby');
+  document.getElementById('daily-start-section').hidden = false;
+  document.getElementById('daily-played-section').hidden = true;
+  document.getElementById('daily-yesterday').hidden = true;
+  document.getElementById('btn-daily-start').disabled = false;
+  document.getElementById('btn-daily-start').textContent = 'Oynamaya Başla';
+
+  const data = await apiFetch('GET', '/api/daily');
+
+  // Dünkü sonuç
+  if (data.yesterday) {
+    const yEl = document.getElementById('daily-yesterday');
+    const yst = data.yesterday;
+    yEl.hidden = false;
+    document.getElementById('daily-yesterday-rank').textContent =
+      yst.final_rank ? `${yst.final_rank}. sıra` : 'Sıralama bekleniyor';
+    document.getElementById('daily-yesterday-kl').textContent =
+      yst.kl_earned != null ? `+${yst.kl_earned} KL` : '';
+  }
+
+  if (data.played) {
+    document.getElementById('daily-start-section').hidden = true;
+    document.getElementById('daily-played-section').hidden = false;
+    document.getElementById('daily-played-score-val').textContent = data.score;
+    document.getElementById('daily-lobby-rank').textContent = `${data.currentRank}. sıra`;
+  } else {
+    // Butona matrisi bağla
+    document.getElementById('btn-daily-start').onclick = () => startDailyGame(data.matrix);
+  }
+}
+
+function startDailyGame(matrix) {
+  mode = 'daily';
+  setGameDuration(150);
+  state.matrix = matrix;
+  state.phase = PHASES.FILL;
+  document.getElementById('multi-result').hidden = true;
+  document.getElementById('result-words-section').hidden = false;
+
+  renderGameMatrix(onTileClick);
+  clearCurrentWord();
+  updateWordDisplay();
+  updateTimer(150);
+  updateScore();
+  document.getElementById('words-list').innerHTML = '';
+  document.getElementById('btn-extend-time').hidden = true;
+  showScreen('screen-game');
+  showCountdownOverlay(true);
+
+  startCountdown(
+    n => { updateCountdown(n); playWarningBeep(); },
+    () => {
+      showCountdownOverlay(false);
+      state.phase = PHASES.PLAYING;
+      updateTimer(150);
+      bindGameEvents();
+      requestWakeLock();
+
+      const _onDailyEnd = async () => {
+        _soloGameEndTime = null;
+        _soloOnEnd = null;
+        _soloTickCb = null;
+        removeGameEvents();
+        releaseWakeLock();
+        const missed = findMissedWords();
+        renderResult(missed);
+        document.getElementById('btn-again').hidden = true;
+        document.getElementById('daily-result-banner').hidden = true;
+        showScreen('screen-result');
+        setTimeout(() => startResult(), 100);
+        const wordsFound = state.submittedWords.filter(w => w.valid).length;
+        const res = await apiFetch('POST', '/api/daily/submit', { score: state.score, wordsFound });
+        if (res.ok) {
+          document.getElementById('daily-rank-number').textContent = `${res.currentRank}. sıra`;
+          document.getElementById('daily-result-banner').hidden = false;
+        }
+        setGameDuration(120);
+        mode = 'solo';
+      };
+
+      _soloOnEnd = _onDailyEnd;
+      _soloTickCb = seconds => updateTimer(seconds);
+      _soloGameEndTime = Date.now() + 150 * 1000;
+      startGame(_soloTickCb, _onDailyEnd);
+    }
+  );
 }
 
 // ─── 1v1 Online ──────────────────────────────────────────────
@@ -1147,7 +1239,7 @@ function _startCountdown() {
       requestWakeLock();
       setTimeout(() => startGameTutorial(), 100);
 
-      const _onSoloEnd = () => {
+      const _onSoloEnd = async () => {
         _soloGameEndTime = null;
         _soloOnEnd = null;
         _soloTickCb = null;
@@ -1155,8 +1247,19 @@ function _startCountdown() {
         releaseWakeLock();
         const missed = findMissedWords();
         renderResult(missed);
+        document.getElementById('daily-result-banner').hidden = true;
+        document.getElementById('btn-again').hidden = mode === 'daily';
         showScreen('screen-result');
         setTimeout(() => startResult(), 100);
+        if (mode === 'daily') {
+          const wordsFound = state.submittedWords.filter(w => w.valid).length;
+          const data = await apiFetch('POST', '/api/daily/submit', { score: state.score, wordsFound });
+          if (data.ok) {
+            document.getElementById('daily-rank-number').textContent = `${data.currentRank}. sıra`;
+            document.getElementById('daily-result-banner').hidden = false;
+          }
+          mode = 'solo';
+        }
       };
       const _tick = seconds => updateTimer(seconds);
       _soloOnEnd = _onSoloEnd;
@@ -1372,6 +1475,9 @@ socket.on('extension_pending_offline', () => {
 function bindResultEvents() {
   document.getElementById('btn-again').addEventListener('click', goToFill);
   document.getElementById('btn-to-lobby').addEventListener('click', () => {
+    document.getElementById('btn-again').hidden = false;
+    document.getElementById('daily-result-banner').hidden = true;
+    setGameDuration(120);
     renderLobby();
     showScreen('screen-lobby');
   });
@@ -1450,6 +1556,7 @@ function bindProfile() {
 
 document.getElementById('btn-friends-lobby').addEventListener('click', openFriends);
 document.getElementById('btn-friends-back').addEventListener('click', () => showScreen('screen-lobby'));
+document.getElementById('btn-daily-back').addEventListener('click', () => showScreen('screen-lobby'));
 
 function openFriends() {
   showScreen('screen-friends');

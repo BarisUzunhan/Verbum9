@@ -285,6 +285,32 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 3000;
 const WORDS_PATH = path.join(__dirname, '../data/words.json');
 
+// ─── Günlük Mod Yardımcıları ──────────────────────────────────
+
+function getDailyDate() {
+  const tz = process.env.DAILY_RESET_TIMEZONE || 'UTC';
+  return new Date().toLocaleDateString('en-CA', { timeZone: tz }); // 'YYYY-MM-DD'
+}
+
+let _nineLetterWords = null;
+function getNineLetterWords() {
+  if (_nineLetterWords) return _nineLetterWords;
+  const data = JSON.parse(require('fs').readFileSync(WORDS_PATH, 'utf8'));
+  _nineLetterWords = (data.words || []).filter(w => w.length === 9);
+  return _nineLetterWords;
+}
+
+async function getTodayPuzzle() {
+  const date = getDailyDate();
+  const { data: existing } = await supabase.from('daily_puzzles').select('*').eq('date', date).maybeSingle();
+  if (existing) return existing;
+  const words = getNineLetterWords();
+  const word = words[Math.floor(Math.random() * words.length)].toLocaleUpperCase('tr-TR');
+  const matrix = [...word].sort(() => Math.random() - 0.5);
+  const { data } = await supabase.from('daily_puzzles').insert({ date, word, matrix }).select().single();
+  return data;
+}
+
 async function checkTDK(word, withMeanings = false) {
   return new Promise(resolve => {
     const req = https.request({
@@ -1084,6 +1110,99 @@ app.post('/api/friends/invite-email', requireAuth, async (req, res) => {
     console.error('Davet maili gönderilemedi:', e.message);
     res.json({ ok: false, error: 'Mail gönderilemedi, lütfen tekrar dene.' });
   }
+});
+
+// ─── Günlük Mod API ──────────────────────────────────────────
+
+app.get('/api/daily', requireAuth, async (req, res) => {
+  const today = getDailyDate();
+  const puzzle = await getTodayPuzzle();
+
+  const { data: todayScore } = await supabase.from('daily_scores')
+    .select('*').eq('user_id', req.user.id).eq('date', today).maybeSingle();
+
+  // Dünkü sonuç
+  const tz = process.env.DAILY_RESET_TIMEZONE || 'UTC';
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  const yesterday = d.toLocaleDateString('en-CA', { timeZone: tz });
+  const { data: ystScore } = await supabase.from('daily_scores')
+    .select('score, final_rank, kl_earned').eq('user_id', req.user.id).eq('date', yesterday).maybeSingle();
+
+  if (todayScore) {
+    const { count } = await supabase.from('daily_scores')
+      .select('*', { count: 'exact', head: true })
+      .eq('date', today).gt('score', todayScore.score);
+    const currentRank = (count || 0) + 1;
+    return res.json({ played: true, score: todayScore.score, currentRank, yesterday: ystScore || null });
+  }
+
+  res.json({ played: false, matrix: puzzle.matrix, yesterday: ystScore || null });
+});
+
+app.post('/api/daily/submit', requireAuth, async (req, res) => {
+  const today = getDailyDate();
+  const { score, wordsFound } = req.body;
+
+  const { data: existing } = await supabase.from('daily_scores')
+    .select('id').eq('user_id', req.user.id).eq('date', today).maybeSingle();
+  if (existing) return res.json({ ok: false, error: 'Zaten oynadın.' });
+
+  await supabase.from('daily_scores').insert({
+    user_id: req.user.id, date: today,
+    score: score || 0, words_found: wordsFound || 0,
+  });
+
+  const { count } = await supabase.from('daily_scores')
+    .select('*', { count: 'exact', head: true })
+    .eq('date', today).gt('score', score || 0);
+  const currentRank = (count || 0) + 1;
+
+  res.json({ ok: true, currentRank });
+});
+
+// Cron tarafından çağrılır — gün sonu KL dağıtımı
+app.post('/api/daily/finalize', async (req, res) => {
+  if (req.headers['x-cron-key'] !== process.env.CRON_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+
+  const tz = process.env.DAILY_RESET_TIMEZONE || 'UTC';
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  const date = d.toLocaleDateString('en-CA', { timeZone: tz });
+
+  const { data: scores } = await supabase.from('daily_scores')
+    .select('id, user_id, score').eq('date', date).is('final_rank', null).order('score', { ascending: false });
+  if (!scores || scores.length === 0) return res.json({ ok: true, processed: 0 });
+
+  let rank = 1;
+  let i = 0;
+  let awarded = 0;
+
+  while (i < scores.length) {
+    const groupScore = scores[i].score;
+    const group = [];
+    while (i < scores.length && scores[i].score === groupScore) { group.push(scores[i]); i++; }
+
+    let kl = 0;
+    if (rank === 1)      kl = 300;
+    else if (rank === 2) kl = 200;
+    else if (rank === 3) kl = 100;
+    else if (awarded < 100) kl = 20;
+
+    for (const s of group) {
+      await supabase.from('daily_scores').update({ final_rank: rank, kl_earned: kl }).eq('id', s.id);
+      if (kl > 0) {
+        const { data: u } = await supabase.from('users').select('kl_balance').eq('id', s.user_id).single();
+        await supabase.from('users').update({ kl_balance: (u?.kl_balance || 0) + kl }).eq('id', s.user_id);
+      }
+    }
+
+    awarded += group.length;
+    rank += group.length;
+    if (awarded >= 100 && rank > 3) break;
+  }
+
+  res.json({ ok: true, processed: scores.length });
 });
 
 // ─── Socket.IO — Çok Oyunculu Motor ─────────────────────────

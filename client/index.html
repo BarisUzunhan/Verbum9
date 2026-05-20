@@ -116,10 +116,10 @@
           <div class="mode-title">1v1 Online</div>
           <div class="mode-desc">Rakiple gerçek zamanlı yar</div>
         </div>
-        <div class="mode-card locked" id="mode-daily">
+        <div class="mode-card" id="mode-daily">
           <div class="mode-icon">📅</div>
           <div class="mode-title">Günlük Oyun</div>
-          <div class="mode-badge">Yakında</div>
+          <div class="mode-desc">Herkesle aynı harfler</div>
         </div>
         <div class="mode-card locked" id="mode-class">
           <div class="mode-icon">🏫</div>
@@ -264,9 +264,67 @@
         <ul id="result-missed-list" class="words-list result-mode missed-mode"></ul>
       </div>
 
+      <!-- Günlük mod sıralama (günlük modda gösterilir) -->
+      <div id="daily-result-banner" hidden>
+        <div class="daily-rank-box">
+          <div class="daily-rank-label">Şu anki sıran</div>
+          <div class="daily-rank-number" id="daily-rank-number">—</div>
+          <div class="daily-rank-note">Gün sonunda kesinleşir ve KL ödülün verilir</div>
+        </div>
+      </div>
+
       <div class="result-actions">
         <button id="btn-again" class="btn-primary">Tekrar Oyna</button>
         <button id="btn-to-lobby" class="btn-secondary">Ana Menü</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EKRAN: Günlük Mod Lobisi -->
+  <div id="screen-daily-lobby" class="screen">
+    <div class="friends-header">
+      <button id="btn-daily-back" class="btn-nav-home">← Lobi</button>
+      <h2 class="friends-title">Günlük Oyun</h2>
+      <div style="width:80px"></div>
+    </div>
+    <div class="daily-lobby-body">
+      <!-- Dünkü sonuç -->
+      <div id="daily-yesterday" class="daily-yesterday-box" hidden>
+        <div class="daily-yesterday-title">Dünkü Sonucun</div>
+        <div class="daily-yesterday-stats">
+          <span id="daily-yesterday-rank" class="daily-yst-rank"></span>
+          <span id="daily-yesterday-kl" class="daily-yst-kl"></span>
+        </div>
+      </div>
+
+      <!-- Oynamadıysa: başla -->
+      <div id="daily-start-section">
+        <div class="daily-info-card">
+          <div class="daily-info-icon">📅</div>
+          <div class="daily-info-title">Bugünkü Bulmaca</div>
+          <div class="daily-info-desc">Herkes aynı harflerle oynuyor.<br>2 dk 30 sn içinde en çok kelimeyi bul!</div>
+          <div class="daily-info-prizes">
+            <span class="daily-prize">🥇 300 KL</span>
+            <span class="daily-prize">🥈 200 KL</span>
+            <span class="daily-prize">🥉 100 KL</span>
+            <span class="daily-prize">İlk 100 → 20 KL</span>
+          </div>
+        </div>
+        <button id="btn-daily-start" class="btn-primary daily-start-btn">Oynamaya Başla</button>
+      </div>
+
+      <!-- Oynadıysa: sonucu göster -->
+      <div id="daily-played-section" hidden>
+        <div class="daily-info-card">
+          <div class="daily-played-icon">✓</div>
+          <div class="daily-info-title">Bugün oynadın!</div>
+          <div class="daily-played-score">Puan: <strong id="daily-played-score-val">0</strong></div>
+          <div class="daily-rank-box">
+            <div class="daily-rank-label">Şu anki sıran</div>
+            <div class="daily-rank-number" id="daily-lobby-rank">—</div>
+            <div class="daily-rank-note">Gün sonunda kesinleşir ve KL ödülün verilir</div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
