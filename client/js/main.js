@@ -340,6 +340,8 @@ async function init() {
   const user = await fetchMe();
   if (user) {
     currentUser = user;
+    socket.auth = { token: localStorage.getItem(TOKEN_KEY) };
+    if (!socket.connected) socket.connect();
     renderLobby();
     showScreen('screen-lobby');
     startLobby();
@@ -446,6 +448,8 @@ function bindAuth() {
     if (data.ok) {
       localStorage.setItem(TOKEN_KEY, data.token);
       currentUser = data.user;
+      socket.auth = { token: data.token };
+      if (!socket.connected) socket.connect();
       renderLobby();
       showScreen('screen-lobby');
       const isNewUser = localStorage.getItem('verbum9_new_user');
@@ -1431,6 +1435,7 @@ function bindProfile() {
   document.getElementById('btn-logout').addEventListener('click', () => {
     localStorage.removeItem(TOKEN_KEY);
     currentUser = null;
+    socket.disconnect();
     closeProfile();
     showScreen('screen-auth');
   });
