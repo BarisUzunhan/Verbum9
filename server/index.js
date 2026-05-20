@@ -954,10 +954,10 @@ app.get('/api/friends', requireAuth, async (req, res) => {
   if (!data || data.length === 0) return res.json([]);
   const friendIds = data.map(f => f.requester_id === uid ? f.addressee_id : f.requester_id);
   const { data: users } = await supabase.from('users').select('id, username').in('id', friendIds);
-  const userMap = {}; (users || []).forEach(u => userMap[u.id] = u.username);
+  const userMap = {}; (users || []).forEach(u => userMap[String(u.id)] = u.username);
   res.json(data.map(f => {
-    const fid = f.requester_id === uid ? f.addressee_id : f.requester_id;
-    return { friendshipId: f.id, userId: fid, username: userMap[fid] || '?', online: onlineUsers.has(fid) };
+    const fid = String(f.requester_id) === String(uid) ? f.addressee_id : f.requester_id;
+    return { friendshipId: f.id, userId: fid, username: userMap[String(fid)] || '?', online: onlineUsers.has(String(fid)) };
   }));
 });
 
@@ -967,7 +967,7 @@ app.get('/api/friends/requests', requireAuth, async (req, res) => {
   if (!data || data.length === 0) return res.json([]);
   const ids = data.map(f => f.requester_id);
   const { data: users } = await supabase.from('users').select('id, username').in('id', ids);
-  const userMap = {}; (users || []).forEach(u => userMap[u.id] = u.username);
+  const userMap = {}; (users || []).forEach(u => userMap[String(u.id)] = u.username);
   res.json(data.map(f => ({ id: f.id, userId: f.requester_id, username: userMap[f.requester_id] || '?', createdAt: f.created_at })));
 });
 
@@ -985,7 +985,7 @@ app.post('/api/friends/request', requireAuth, async (req, res) => {
   if (existing?.status === 'pending') return res.json({ ok: false, error: 'İstek zaten bekliyor.' });
   const { error } = await supabase.from('friendships').insert({ requester_id: req.user.id, addressee_id: target.id });
   if (error) return res.json({ ok: false, error: 'Hata oluştu.' });
-  const t = onlineUsers.get(target.id);
+  const t = onlineUsers.get(String(target.id));
   if (t) t.socket.emit('friend_request_received', { fromUsername: req.user.username });
   res.json({ ok: true, username: target.username });
 });
@@ -998,7 +998,7 @@ app.patch('/api/friends/:id', requireAuth, async (req, res) => {
   if (!fs) return res.json({ ok: false, error: 'İstek bulunamadı.' });
   await supabase.from('friendships').update({ status: accept ? 'accepted' : 'rejected' }).eq('id', id);
   if (accept) {
-    const t = onlineUsers.get(fs.requester_id);
+    const t = onlineUsers.get(String(fs.requester_id));
     if (t) t.socket.emit('friend_request_accepted', { byUsername: req.user.username });
   }
   res.json({ ok: true });
@@ -1197,7 +1197,7 @@ io.on('connection', socket => {
   // Online kullanıcı kaydı
   if (authToken) {
     userService.getUserByToken(authToken).then(user => {
-      if (user) { onlineUsers.set(user.id, { socket, name: user.username }); socket._userId = user.id; }
+      if (user) { onlineUsers.set(String(user.id), { socket, name: user.username }); socket._userId = String(user.id); }
     });
   }
 
@@ -1206,7 +1206,7 @@ io.on('connection', socket => {
     if (socketRoom.has(socket.id)) return socket.emit('friend_invite_result', { ok: false, error: 'Zaten bir oyundasınız.' });
     const fromUser = await userService.getUserByToken(authToken);
     if (!fromUser) return;
-    const target = onlineUsers.get(toUserId);
+    const target = onlineUsers.get(String(toUserId));
     if (!target) return socket.emit('friend_invite_result', { ok: false, error: 'Arkadaş şu an çevrimiçi değil.' });
     if (socketRoom.has(target.socket.id)) return socket.emit('friend_invite_result', { ok: false, error: 'Arkadaş şu an başka bir oyunda.' });
     const inviteId = Date.now();
@@ -1457,7 +1457,7 @@ io.on('connection', socket => {
   });
 
   socket.on('disconnect', () => {
-    if (socket._userId) onlineUsers.delete(socket._userId);
+    if (socket._userId) onlineUsers.delete(String(socket._userId));
     // Kuyruktan çıkar
     const qi = queue.findIndex(p => p.socket.id === socket.id);
     if (qi !== -1) queue.splice(qi, 1);
