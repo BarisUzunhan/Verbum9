@@ -125,23 +125,29 @@ async function sendPasswordResetEmail(to, token, username) {
   });
 }
 
-async function sendInviteEmail(to, fromName, fromUsername) {
+async function sendInviteEmail(to, fromName, message) {
   const link = APP_URL;
+  const msgBlock = message
+    ? `<p style="color:#ccd6f6;line-height:1.7;margin:0 0 24px;padding:14px 18px;background:#16213e;border-radius:10px;border-left:3px solid #e94560">
+        <em>"${message}"</em>
+       </p>`
+    : '';
   const body = JSON.stringify({
     sender:      { name: 'Verbum9', email: process.env.BREVO_SENDER_EMAIL },
     to:          [{ email: to }],
-    subject:     `${fromName} seni Verbum9'a davet ediyor!`,
+    subject:     `${fromName} seni Verbum oynamaya davet ediyor!`,
     htmlContent: `
       <div style="font-family:system-ui;max-width:480px;margin:0 auto;padding:32px;background:#0f0e17;color:#fff;border-radius:16px">
         <h1 style="margin:0 0 24px;letter-spacing:-1px">
           <span style="color:#e94560">VERBUM</span><span style="color:#4cc9f0">9</span>
         </h1>
         <p style="font-size:1rem;margin:0 0 16px">Merhaba!</p>
-        <p style="color:#ccd6f6;line-height:1.7;margin:0 0 24px">
-          Arkadaşın <strong style="color:#fff">${fromName}</strong>,
-          <strong style="color:#4cc9f0">${fromUsername}</strong> kullanıcı adıyla Verbum9 oynuyor
-          ve seninle beraber oynamanın harika olacağını düşündü.<br><br>
-          Sen de onunla oynamak istersen aşağıdaki butona basarak kaydol ve hemen oynamaya başla!
+        <p style="color:#ccd6f6;line-height:1.7;margin:0 0 20px">
+          Arkadaşın <strong style="color:#fff">${fromName}</strong> seni Verbum oynamaya davet ediyor.
+        </p>
+        ${msgBlock}
+        <p style="color:#ccd6f6;line-height:1.7;margin:0 0 28px">
+          Aşağıdaki linke tıklayarak kaydolabilirsin.
         </p>
         <a href="${link}"
            style="display:inline-block;padding:14px 28px;background:#e94560;color:#fff;
@@ -1067,12 +1073,12 @@ app.delete('/api/friends/:id', requireAuth, async (req, res) => {
 });
 
 app.post('/api/friends/invite-email', requireAuth, async (req, res) => {
-  const { email, fromName } = req.body;
+  const { email, fromName, message } = req.body;
   if (!email || !fromName) return res.json({ ok: false, error: 'E-posta ve isim gerekli.' });
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) return res.json({ ok: false, error: 'Geçersiz e-posta adresi.' });
   try {
-    await sendInviteEmail(email.trim(), fromName.trim(), req.user.username);
+    await sendInviteEmail(email.trim(), fromName.trim(), (message || '').trim());
     res.json({ ok: true });
   } catch (e) {
     console.error('Davet maili gönderilemedi:', e.message);

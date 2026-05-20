@@ -571,6 +571,7 @@ socket.on('queued', () => {
 });
 
 socket.on('matched', ({ opponentName, playerIndex, turnIndex }) => {
+  mode = 'multi';
   mp.playerIndex = playerIndex;
   mp.turnIndex = turnIndex;
   mp.opponentName = opponentName;
@@ -1013,7 +1014,11 @@ function renderResultMulti(players, missedWords = []) {
     display.forEach(word => {
       const li = document.createElement('li');
       li.className = 'valid';
-      li.appendChild(document.createTextNode(word));
+      const wordBtn = document.createElement('button');
+      wordBtn.className = 'word-meaning-btn';
+      wordBtn.textContent = word;
+      wordBtn.addEventListener('click', () => showMeaning(word));
+      li.appendChild(wordBtn);
       const pts = document.createElement('span');
       pts.className = 'word-points';
       pts.textContent = word.length + ' harf';
@@ -1556,7 +1561,8 @@ function inviteFriend(userId, username) {
 
 document.getElementById('btn-invite-by-email').addEventListener('click', () => {
   document.getElementById('invite-email-input').value = '';
-  document.getElementById('invite-name-input').value = currentUser?.username || '';
+  document.getElementById('invite-name-input').value = '';
+  document.getElementById('invite-message-input').value = '';
   const err = document.getElementById('invite-email-error');
   err.hidden = true;
   document.getElementById('invite-email-modal').hidden = false;
@@ -1568,17 +1574,19 @@ document.getElementById('btn-invite-email-cancel').addEventListener('click', () 
 });
 
 document.getElementById('btn-invite-email-send').addEventListener('click', async () => {
-  const email    = document.getElementById('invite-email-input').value.trim();
-  const fromName = document.getElementById('invite-name-input').value.trim();
-  const errEl    = document.getElementById('invite-email-error');
-  const btn      = document.getElementById('btn-invite-email-send');
+  const email   = document.getElementById('invite-email-input').value.trim();
+  const name    = document.getElementById('invite-name-input').value.trim();
+  const message = document.getElementById('invite-message-input').value.trim();
+  const errEl   = document.getElementById('invite-email-error');
+  const btn     = document.getElementById('btn-invite-email-send');
 
   errEl.hidden = true;
-  if (!email || !fromName) { errEl.textContent = 'Lütfen tüm alanları doldur.'; errEl.hidden = false; return; }
+  if (!email) { errEl.textContent = 'Lütfen arkadaşının e-posta adresini gir.'; errEl.hidden = false; return; }
+  if (!name)  { errEl.textContent = 'Arkadaşın Verbum\'dan mail alacak. Senin olduğunu anlayabilmesi için ismini girmelisin.'; errEl.hidden = false; return; }
 
   btn.disabled = true;
   btn.textContent = 'Gönderiliyor...';
-  const data = await apiFetch('POST', '/api/friends/invite-email', { email, fromName });
+  const data = await apiFetch('POST', '/api/friends/invite-email', { email, fromName: name, message });
   btn.disabled = false;
   btn.textContent = 'Gönder';
 

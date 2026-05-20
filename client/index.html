@@ -304,8 +304,10 @@
       <h3 class="modal-title">E-posta ile Davet Et</h3>
       <label class="modal-label">Arkadaşının e-posta adresi</label>
       <input id="invite-email-input" class="modal-input" type="email" placeholder="ornek@mail.com" autocomplete="off">
-      <label class="modal-label">Adın (mailin içinde görünecek)</label>
-      <input id="invite-name-input" class="modal-input" type="text" placeholder="Adın" autocomplete="off">
+      <label class="modal-label">Adın <span style="color:var(--accent)">*</span></label>
+      <input id="invite-name-input" class="modal-input" type="text" placeholder="Adın veya takma adın" autocomplete="off">
+      <label class="modal-label">Mesaj (opsiyonel)</label>
+      <textarea id="invite-message-input" class="modal-input modal-textarea" placeholder="Arkadaşına bir şey söylemek ister misin?" rows="3"></textarea>
       <p id="invite-email-error" class="modal-error" hidden></p>
       <div class="modal-actions">
         <button id="btn-invite-email-send" class="btn-primary">Gönder</button>
