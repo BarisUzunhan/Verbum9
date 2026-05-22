@@ -1576,6 +1576,22 @@ function openFriends() {
   loadFriendRequests();
 }
 
+function formatLastSeen(lastSeen, online) {
+  if (online) return '<span class="friend-online-status">● Çevrimiçi</span>';
+  if (!lastSeen) return '<span class="friend-status">○ Hiç görülmedi</span>';
+  const diff = Date.now() - new Date(lastSeen).getTime();
+  const mins  = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days  = Math.floor(diff / 86400000);
+  let label;
+  if (mins < 1)       label = 'az önce çevrimdışı';
+  else if (mins < 60) label = `${mins} dk önce görüldü`;
+  else if (hours < 24) label = `${hours} saat önce görüldü`;
+  else if (days < 30) label = `${days} gün önce görüldü`;
+  else                label = 'uzun süredir çevrimdışı';
+  return `<span class="friend-status">○ ${label}</span>`;
+}
+
 async function loadFriends() {
   const res = await fetch('/api/friends', { headers: { Authorization: 'Bearer ' + localStorage.getItem(TOKEN_KEY) } });
   const friends = await res.json();
@@ -1590,7 +1606,7 @@ async function loadFriends() {
   list.innerHTML = friends.map(f => `
     <div class="friend-row" id="friend-row-${f.friendshipId}">
       <div class="friend-avatar">${f.username[0].toLocaleUpperCase('tr-TR')}${f.online ? '<div class="online-dot"></div>' : ''}</div>
-      <div class="friend-name">${f.username}<br><span class="${f.online ? 'friend-online-status' : 'friend-status'}">${f.online ? '● Çevrimiçi' : '○ Çevrimdışı'}</span></div>
+      <div class="friend-name">${f.username}<br>${formatLastSeen(f.lastSeen, f.online)}</div>
       <div class="friend-actions">
         <button class="btn-friend-invite" ${!f.online ? 'disabled' : ''} onclick="inviteFriend(${f.userId}, '${f.username}')">⚡ Davet</button>
         <button class="btn-friend-remove" onclick="removeFriend(${f.friendshipId})">✕</button>

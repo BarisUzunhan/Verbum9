@@ -58,6 +58,7 @@ function fromDB(u) {
     gamesPlayed:       u.games_played,
     gamesWon:          u.games_won,
     createdAt:         u.created_at,
+    lastSeen:          u.last_seen ?? null,
   };
 }
 
@@ -177,6 +178,11 @@ async function deductKL(token, amount) {
   return safeUser(fromDB(data));
 }
 
+async function updateLastSeen(userId) {
+  if (!userId) return;
+  await supabase.from('users').update({ last_seen: new Date().toISOString() }).eq('id', userId);
+}
+
 async function recordGameResult(token, { scoreDelta, won }) {
   if (!token) return null;
   const user = await getUserByToken(token);
@@ -212,4 +218,5 @@ module.exports = {
   resetPassword,
   deductKL,
   recordGameResult,
+  updateLastSeen,
 };

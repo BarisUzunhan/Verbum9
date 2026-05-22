@@ -1034,17 +1034,23 @@ app.get('/api/friends/search', requireAuth, async (req, res) => {
   res.json(results);
 });
 
+function isOnline(lastSeen) {
+  if (!lastSeen) return false;
+  return (Date.now() - new Date(lastSeen).getTime()) < 5 * 60 * 1000;
+}
+
 app.get('/api/friends', requireAuth, async (req, res) => {
   const uid = req.user.id;
   const { data } = await supabase.from('friendships').select('id, requester_id, addressee_id')
     .eq('status', 'accepted').or(`requester_id.eq.${uid},addressee_id.eq.${uid}`);
   if (!data || data.length === 0) return res.json([]);
   const friendIds = data.map(f => f.requester_id === uid ? f.addressee_id : f.requester_id);
-  const { data: users } = await supabase.from('users').select('id, username').in('id', friendIds);
-  const userMap = {}; (users || []).forEach(u => userMap[String(u.id)] = u.username);
+  const { data: users } = await supabase.from('users').select('id, username, last_seen').in('id', friendIds);
+  const userMap = {}; (users || []).forEach(u => { userMap[String(u.id)] = { username: u.username, lastSeen: u.last_seen }; });
   res.json(data.map(f => {
     const fid = String(f.requester_id) === String(uid) ? f.addressee_id : f.requester_id;
-    return { friendshipId: f.id, userId: fid, username: userMap[String(fid)] || '?', online: onlineUsers.has(String(fid)) };
+    const u = userMap[String(fid)] || {};
+    return { friendshipId: f.id, userId: fid, username: u.username || '?', online: isOnline(u.lastSeen), lastSeen: u.lastSeen || null };
   }));
 });
 
@@ -1388,10 +1394,15 @@ function closeRoom(socket) {
 io.on('connection', socket => {
   const authToken = socket.handshake.auth?.token;
 
-  // Online kullanıcı kaydı
+  // Online kullanıcı kaydı + last_seen
   if (authToken) {
     userService.getUserByToken(authToken).then(user => {
-      if (user) { onlineUsers.set(String(user.id), { socket, name: user.username }); socket._userId = String(user.id); }
+      if (user) {
+        onlineUsers.set(String(user.id), { socket, name: user.username });
+        socket._userId = String(user.id);
+        userService.updateLastSeen(user.id);
+        socket._heartbeat = setInterval(() => userService.updateLastSeen(user.id), 60 * 1000);
+      }
     });
   }
 
@@ -1651,7 +1662,11 @@ io.on('connection', socket => {
   });
 
   socket.on('disconnect', () => {
-    if (socket._userId) onlineUsers.delete(String(socket._userId));
+    if (socket._heartbeat) clearInterval(socket._heartbeat);
+    if (socket._userId) {
+      onlineUsers.delete(String(socket._userId));
+      userService.updateLastSeen(socket._userId);
+    }
     // Kuyruktan çıkar
     const qi = queue.findIndex(p => p.socket.id === socket.id);
     if (qi !== -1) queue.splice(qi, 1);
