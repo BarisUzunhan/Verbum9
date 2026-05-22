@@ -1118,6 +1118,18 @@ app.post('/api/friends/invite-email', requireAuth, async (req, res) => {
   }
 });
 
+// ─── Grup Odası REST ─────────────────────────────────────────
+
+app.get('/api/group/open', requireAuth, (req, res) => {
+  const open = [];
+  for (const [code, room] of groupRooms) {
+    if (room.joinMode === 'open' && room.status === 'lobby') {
+      open.push({ code, hostName: room.host.displayName, playerCount: room.players.length });
+    }
+  }
+  res.json(open);
+});
+
 // ─── Günlük Mod API ──────────────────────────────────────────
 
 app.get('/api/daily', requireAuth, async (req, res) => {
@@ -1229,6 +1241,8 @@ const pendingReconnects = new Map(); // token → { roomId, playerIndex }
 const finishedGames = new Map();    // token → { result, expiresAt } — ekran kapalıyken biten oyunlar için
 const onlineUsers = new Map();      // userId → { socket, name }
 const pendingInvites = new Map();   // inviteId → { fromSocket, fromName, fromToken, toUserId }
+const groupRooms = new Map();       // code → room
+const socketGroupRoom = new Map();  // socketId → code
 
 // 1 dakikada bir süresi dolmuş sonuçları temizle
 setInterval(() => {
@@ -1378,6 +1392,54 @@ function validateWord(room, pIdx, rawWord) {
   return { status: 'valid', word: wordU, points: wordU.length };
 }
 
+function genGroupCode() {
+  let code;
+  do { code = String(Math.floor(100000 + Math.random() * 900000)); }
+  while (groupRooms.has(code));
+  return code;
+}
+
+async function grpRoomEnd(room) {
+  clearInterval(room.timerInterval);
+  room.status = 'ended';
+  const rankings = [...room.players]
+    .sort((a, b) => b.score - a.score)
+    .map((p, i) => ({ rank: i + 1, displayName: p.displayName, score: p.score }));
+  const seen = new Set();
+  const allWords = [];
+  for (const p of room.players) {
+    for (const w of p.words) {
+      if (!seen.has(w)) { seen.add(w); allWords.push({ word: w, length: w.length }); }
+    }
+  }
+  allWords.sort((a, b) => b.length - a.length || a.word.localeCompare(b.word, 'tr'));
+  io.to(`grp_${room.code}`).emit('grp_ended', { rankings, words: allWords.slice(0, 100) });
+  setTimeout(() => {
+    for (const p of room.players) socketGroupRoom.delete(p.socket.id);
+    for (const p of room.pendingPlayers) socketGroupRoom.delete(p.socket.id);
+    groupRooms.delete(room.code);
+  }, 5 * 60 * 1000);
+}
+
+function leaveGroupRoom(socket, room) {
+  const isHost = room.host.socket.id === socket.id;
+  room.players = room.players.filter(p => p.socket.id !== socket.id);
+  room.pendingPlayers = room.pendingPlayers.filter(p => p.socket.id !== socket.id);
+  socketGroupRoom.delete(socket.id);
+  socket.leave(`grp_${room.code}`);
+  if (isHost) {
+    io.to(`grp_${room.code}`).emit('grp_host_left');
+    clearInterval(room.timerInterval);
+    for (const p of room.players) socketGroupRoom.delete(p.socket.id);
+    for (const p of room.pendingPlayers) socketGroupRoom.delete(p.socket.id);
+    groupRooms.delete(room.code);
+  } else if (room.status === 'lobby') {
+    io.to(`grp_${room.code}`).emit('grp_players_update', {
+      players: room.players.map(p => ({ displayName: p.displayName, userId: p.userId }))
+    });
+  }
+}
+
 function closeRoom(socket) {
   const roomId = socketRoom.get(socket.id);
   if (!roomId) return;
@@ -1488,6 +1550,159 @@ io.on('connection', socket => {
       console.log(`Yeniden bağlandı: ${room.names[playerIndex]} oda ${roomId}`);
     }
   }
+
+  // ─── Grup Odası Socket Olayları ──────────────────────────────
+
+  socket.on('grp_create', async ({ displayName }) => {
+    if (!authToken) return;
+    const user = await userService.getUserByToken(authToken);
+    if (!user) return;
+    const name = ((displayName || '').trim() || user.username).slice(0, 20);
+    const code = genGroupCode();
+    const room = {
+      code, host: { socket, userId: user.id, username: user.username, displayName: name },
+      matrix: [], duration: 180, status: 'lobby', joinMode: null,
+      players: [{ socket, userId: user.id, username: user.username, displayName: name, words: [], score: 0 }],
+      pendingPlayers: [], timerInterval: null, timeLeft: 180,
+    };
+    groupRooms.set(code, room);
+    socketGroupRoom.set(socket.id, code);
+    socket.join(`grp_${code}`);
+    socket.emit('grp_created', { code });
+  });
+
+  socket.on('grp_set_invite_mode', ({ code, mode }) => {
+    const room = groupRooms.get(code);
+    if (!room || room.host.socket.id !== socket.id || room.status !== 'lobby') return;
+    if (!['open', 'code'].includes(mode)) return;
+    room.joinMode = mode;
+    socket.emit('grp_mode_set', { mode });
+  });
+
+  socket.on('grp_invite_friends', async ({ code, friendIds }) => {
+    const room = groupRooms.get(code);
+    if (!room || room.host.socket.id !== socket.id) return;
+    const fromUser = await userService.getUserByToken(authToken);
+    if (!fromUser) return;
+    let sent = 0;
+    for (const fid of (friendIds || [])) {
+      const target = onlineUsers.get(String(fid));
+      if (target) { target.socket.emit('grp_friend_invite', { code, fromName: fromUser.username }); sent++; }
+    }
+    socket.emit('grp_invites_sent', { count: sent });
+  });
+
+  socket.on('grp_join', async ({ code }) => {
+    const room = groupRooms.get(code);
+    if (!room || room.status !== 'lobby') return socket.emit('grp_join_error', { error: 'Oda bulunamadı veya oyun başladı.' });
+    if (!authToken) return socket.emit('grp_join_error', { error: 'Giriş gerekli.' });
+    const user = await userService.getUserByToken(authToken);
+    if (!user) return socket.emit('grp_join_error', { error: 'Giriş gerekli.' });
+    if (room.players.some(p => p.userId === user.id)) return socket.emit('grp_join_error', { error: 'Zaten odadasın.' });
+    const playerData = { socket, userId: user.id, username: user.username, displayName: user.username, words: [], score: 0 };
+    room.players.push(playerData);
+    socketGroupRoom.set(socket.id, code);
+    socket.join(`grp_${code}`);
+    socket.emit('grp_approved', { code, hostName: room.host.displayName });
+    io.to(`grp_${code}`).emit('grp_players_update', {
+      players: room.players.map(p => ({ displayName: p.displayName, userId: p.userId }))
+    });
+  });
+
+  socket.on('grp_request_join', async ({ code }) => {
+    const room = groupRooms.get(code);
+    if (!room || room.status !== 'lobby' || room.joinMode !== 'open')
+      return socket.emit('grp_join_error', { error: 'Bu odaya bu şekilde girilemiyor.' });
+    if (!authToken) return socket.emit('grp_join_error', { error: 'Giriş gerekli.' });
+    const user = await userService.getUserByToken(authToken);
+    if (!user) return socket.emit('grp_join_error', { error: 'Giriş gerekli.' });
+    if (room.players.some(p => p.userId === user.id)) return socket.emit('grp_join_error', { error: 'Zaten odadasın.' });
+    if (room.pendingPlayers.some(p => p.userId === user.id)) return socket.emit('grp_join_error', { error: 'Onay bekleniyor.' });
+    room.pendingPlayers.push({ socket, userId: user.id, username: user.username, displayName: user.username });
+    socket.emit('grp_waiting_approval');
+    room.host.socket.emit('grp_join_request', { socketId: socket.id, displayName: user.username, userId: user.id });
+  });
+
+  socket.on('grp_approve', ({ code, targetSocketId, approve }) => {
+    const room = groupRooms.get(code);
+    if (!room || room.host.socket.id !== socket.id || room.status !== 'lobby') return;
+    const idx = room.pendingPlayers.findIndex(p => p.socket.id === targetSocketId);
+    if (idx === -1) return;
+    const [player] = room.pendingPlayers.splice(idx, 1);
+    if (approve) {
+      room.players.push({ ...player, words: [], score: 0 });
+      socketGroupRoom.set(player.socket.id, code);
+      player.socket.join(`grp_${code}`);
+      player.socket.emit('grp_approved', { code, hostName: room.host.displayName });
+      io.to(`grp_${code}`).emit('grp_players_update', {
+        players: room.players.map(p => ({ displayName: p.displayName, userId: p.userId }))
+      });
+    } else {
+      player.socket.emit('grp_rejected');
+    }
+  });
+
+  socket.on('grp_start', ({ code, matrix, duration }) => {
+    const room = groupRooms.get(code);
+    if (!room || room.host.socket.id !== socket.id || room.status !== 'lobby') return;
+    if (!matrix || matrix.length !== 9 || matrix.some(l => !l))
+      return socket.emit('grp_start_error', { error: 'Matris eksik veya hatalı.' });
+    room.matrix = matrix;
+    room.duration = [120, 180, 240, 300].includes(duration) ? duration : 180;
+    room.timeLeft = room.duration;
+    room.status = 'playing';
+    io.to(`grp_${code}`).emit('grp_started', { matrix: room.matrix, duration: room.duration });
+    let n = 5;
+    io.to(`grp_${code}`).emit('grp_countdown', { n });
+    const cdInterval = setInterval(() => {
+      n--;
+      if (n <= 0) {
+        clearInterval(cdInterval);
+        io.to(`grp_${code}`).emit('grp_game_start');
+        room.timerInterval = setInterval(() => {
+          room.timeLeft--;
+          io.to(`grp_${code}`).emit('grp_timer_tick', { timeLeft: room.timeLeft });
+          if (room.timeLeft <= 0) grpRoomEnd(room);
+        }, 1000);
+      } else {
+        io.to(`grp_${code}`).emit('grp_countdown', { n });
+      }
+    }, 1000);
+  });
+
+  socket.on('grp_submit_word', ({ word }) => {
+    const code = socketGroupRoom.get(socket.id);
+    if (!code) return;
+    const room = groupRooms.get(code);
+    if (!room || room.status !== 'playing') return;
+    const player = room.players.find(p => p.socket.id === socket.id);
+    if (!player) return;
+    const wordU = (word || '').toLocaleUpperCase('tr-TR');
+    const wordL = wordU.toLocaleLowerCase('tr-TR');
+    if (wordU.length < 2) return socket.emit('grp_word_result', { status: 'short', word: wordU, points: 0 });
+    const mc = {};
+    room.matrix.forEach(l => { mc[l] = (mc[l] || 0) + 1; });
+    const need = {};
+    for (const ch of wordU) need[ch] = (need[ch] || 0) + 1;
+    for (const ch in need) {
+      if ((mc[ch] || 0) < need[ch]) return socket.emit('grp_word_result', { status: 'invalid', word: wordU, points: 0 });
+    }
+    if (!_wordSet.has(wordL) || _blacklistSet.has(wordL))
+      return socket.emit('grp_word_result', { status: 'invalid', word: wordU, points: 0 });
+    const cnt = player.words.filter(w => w === wordU).length;
+    const max = _homophoneSet.has(wordL) ? 2 : 1;
+    if (cnt >= max) return socket.emit('grp_word_result', { status: 'duplicate', word: wordU, points: 0 });
+    player.words.push(wordU);
+    player.score += wordU.length;
+    socket.emit('grp_word_result', { status: 'valid', word: wordU, points: wordU.length });
+  });
+
+  socket.on('grp_leave', () => {
+    const code = socketGroupRoom.get(socket.id);
+    if (!code) return;
+    const room = groupRooms.get(code);
+    if (room) leaveGroupRoom(socket, room);
+  });
 
   socket.on('join_queue', ({ name }) => {
     if (socketRoom.has(socket.id)) return; // zaten bir odada
@@ -1699,6 +1914,13 @@ io.on('connection', socket => {
           return;
         }
       }
+    }
+
+    // Grup odası temizliği
+    const grpCode = socketGroupRoom.get(socket.id);
+    if (grpCode) {
+      const grpRoom = groupRooms.get(grpCode);
+      if (grpRoom) leaveGroupRoom(socket, grpRoom);
     }
 
     closeRoom(socket);

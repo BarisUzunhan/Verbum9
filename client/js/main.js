@@ -129,7 +129,7 @@ function bindHintEvents() {
   document.getElementById('btn-hint').addEventListener('click', () => {
     if (state.phase !== PHASES.PLAYING) return;
 
-    if (mode === 'solo') {
+    if (mode === 'solo' || mode === 'group' || mode === 'daily') {
       const missed = findMissedWords();
       if (missed.length === 0) { showToast('Başka kelime bulunamadı!', 3000); return; }
       const word = missed[Math.floor(Math.random() * Math.min(missed.length, 30))];
@@ -189,6 +189,9 @@ function doExit() {
   if (mode === 'multi') {
     socket.emit('leave_game'); // kasıtlı çıkış — pendingReconnects'e düşmesin
     socket.disconnect();
+    mode = 'solo';
+  } else if (mode === 'group') {
+    socket.emit('grp_leave');
     mode = 'solo';
   } else if (_exitOrigin === 'game') {
     stopGame();
@@ -510,6 +513,7 @@ function bindLobbyEvents() {
   document.getElementById('mode-solo').addEventListener('click', goToFill);
   document.getElementById('mode-1v1').addEventListener('click', goToOnline);
   document.getElementById('mode-daily').addEventListener('click', goToDailyLobby);
+  document.getElementById('mode-multi').addEventListener('click', goToMultiLobby);
 }
 
 function renderLobby() {
@@ -1299,7 +1303,11 @@ function onSubmit() {
   if (mode === 'multi') {
     const word = state.currentWordCells.map(i => state.matrix[i]).join('');
     socket.emit('submit_word', { word });
-    // sonucu socket.on('word_result') alır
+    return;
+  }
+  if (mode === 'group') {
+    const word = state.currentWordCells.map(i => state.matrix[i]).join('');
+    socket.emit('grp_submit_word', { word });
     return;
   }
   const result = submitCurrentWord();
@@ -1789,12 +1797,499 @@ socket.on('friend_request_accepted', ({ byUsername }) => {
   if (document.getElementById('screen-friends').classList.contains('active')) loadFriends();
 });
 
+// ─── Çoklu Mod (Grup Odası) ──────────────────────────────────
+
+let _grpCode = '';
+let _grpHostName = '';
+let _grpSelectedFriendIds = new Set();
+let _grpInviteCode = '';
+
+// Host matris durumu
+let _mhMatrix = Array(9).fill('');
+let _mhActiveCell = 0;
+let _mhDuration = 180;
+
+function goToMultiLobby() {
+  showScreen('screen-multi-lobby');
+  document.getElementById('multi-code-input').value = '';
+  document.getElementById('multi-join-error').textContent = '';
+  loadOpenRooms();
+}
+
+async function loadOpenRooms() {
+  const data = await apiFetch('GET', '/api/group/open');
+  const section = document.getElementById('multi-open-section');
+  const list = document.getElementById('multi-open-list');
+  if (!Array.isArray(data) || data.length === 0) { section.hidden = true; return; }
+  section.hidden = false;
+  list.innerHTML = data.map(r =>
+    `<div class="multi-open-row" onclick="joinOpenRoom('${r.code}')">
+      <div><div class="multi-open-host">${r.hostName}</div><div class="multi-open-info">${r.playerCount} oyuncu</div></div>
+      <button class="btn-secondary" style="font-size:.85rem;padding:7px 14px">Katıl</button>
+    </div>`
+  ).join('');
+}
+
+function joinOpenRoom(code) {
+  socket.emit('grp_request_join', { code });
+  document.getElementById('mw-host-name').textContent = '—';
+  document.getElementById('mw-code').textContent = code;
+  document.getElementById('mw-status').textContent = 'Oda sahibinin onayı bekleniyor...';
+  document.getElementById('mw-players-list').innerHTML = '';
+  showScreen('screen-multi-wait');
+}
+
+window.joinOpenRoom = joinOpenRoom;
+
+document.getElementById('btn-multi-back').addEventListener('click', () => showScreen('screen-lobby'));
+
+document.getElementById('btn-multi-join-code').addEventListener('click', () => {
+  const code = document.getElementById('multi-code-input').value.trim();
+  const errEl = document.getElementById('multi-join-error');
+  errEl.textContent = '';
+  if (code.length !== 6 || !/^\d{6}$/.test(code)) {
+    errEl.textContent = '6 haneli bir kod gir.'; return;
+  }
+  socket.emit('grp_join', { code });
+});
+
+document.getElementById('multi-code-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('btn-multi-join-code').click();
+});
+
+document.getElementById('btn-multi-create').addEventListener('click', () => {
+  const nameEl = document.getElementById('multi-display-name');
+  nameEl.value = currentUser?.username || '';
+  document.getElementById('multi-name-error').textContent = '';
+  document.getElementById('multi-name-popup').hidden = false;
+  setTimeout(() => nameEl.focus(), 50);
+});
+
+document.getElementById('btn-multi-name-cancel').addEventListener('click', () => {
+  document.getElementById('multi-name-popup').hidden = true;
+});
+
+document.getElementById('btn-multi-name-confirm').addEventListener('click', () => {
+  const name = document.getElementById('multi-display-name').value.trim();
+  const errEl = document.getElementById('multi-name-error');
+  errEl.textContent = '';
+  if (!name) { errEl.textContent = 'Bir isim gir.'; return; }
+  document.getElementById('multi-name-popup').hidden = true;
+  socket.emit('grp_create', { displayName: name });
+});
+
+document.getElementById('multi-display-name').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('btn-multi-name-confirm').click();
+});
+
+// Host ekranı kurulumu
+function setupHostScreen(code) {
+  _grpCode = code;
+  _mhMatrix = Array(9).fill('');
+  _mhActiveCell = 0;
+  _mhDuration = 180;
+
+  document.getElementById('mh-code-val').textContent = code;
+  document.getElementById('btn-mh-start').disabled = true;
+
+  // Matris oluştur
+  const container = document.getElementById('mh-matrix');
+  container.innerHTML = '';
+  for (let i = 0; i < 9; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'matrix-cell fill-cell';
+    cell.dataset.pos = i;
+    cell.addEventListener('click', () => {
+      _mhActiveCell = i;
+      renderMhMatrix();
+      const inp = document.getElementById('mh-keyboard-input');
+      inp.style.pointerEvents = 'auto';
+      inp.focus();
+    });
+    container.appendChild(cell);
+  }
+  renderMhMatrix();
+
+  // Süre butonları
+  document.querySelectorAll('.mh-dur-btn').forEach(btn => {
+    btn.className = btn.dataset.dur === '180' ? 'mh-dur-btn mh-dur-active' : 'mh-dur-btn';
+    btn.onclick = () => {
+      _mhDuration = parseInt(btn.dataset.dur);
+      document.querySelectorAll('.mh-dur-btn').forEach(b => b.className = 'mh-dur-btn');
+      btn.className = 'mh-dur-btn mh-dur-active';
+    };
+  });
+
+  // Oyuncular listesi
+  const playersList = document.getElementById('mh-players-list');
+  playersList.innerHTML = `<div class="mh-player-row"><span class="mh-player-name">${currentUser?.username || 'Sen'}</span><span class="mh-player-badge">Oda Sahibi</span></div>`;
+  document.getElementById('mh-player-count').textContent = '1';
+  document.getElementById('mh-pending-section').hidden = true;
+
+  showScreen('screen-multi-host');
+}
+
+function renderMhMatrix() {
+  const cells = document.querySelectorAll('#mh-matrix .matrix-cell');
+  cells.forEach((cell, i) => {
+    cell.textContent = _mhMatrix[i] || '';
+    cell.className = 'matrix-cell fill-cell' +
+      (i === _mhActiveCell ? ' active' : '') +
+      (_mhMatrix[i] ? ' filled' : '');
+  });
+  const allFilled = _mhMatrix.every(l => l !== '');
+  document.getElementById('btn-mh-start').disabled = !allFilled;
+}
+
+document.getElementById('btn-mh-close').addEventListener('click', () => {
+  if (_grpCode) socket.emit('grp_leave');
+  _grpCode = '';
+  showScreen('screen-lobby');
+});
+
+document.getElementById('btn-mh-rand-one').addEventListener('click', () => {
+  const pos = _mhActiveCell < 9 && _mhMatrix[_mhActiveCell] === ''
+    ? _mhActiveCell : _mhMatrix.findIndex(l => l === '');
+  if (pos >= 0) {
+    _mhMatrix[pos] = getRandomLetter();
+    _mhActiveCell = Math.min(pos + 1, 9);
+    renderMhMatrix();
+  }
+});
+
+document.getElementById('btn-mh-rand-all').addEventListener('click', () => {
+  for (let i = 0; i < 9; i++) {
+    if (!_mhMatrix[i]) _mhMatrix[i] = getRandomLetter();
+  }
+  _mhActiveCell = 9;
+  renderMhMatrix();
+});
+
+// Host klavye girişi
+document.addEventListener('keydown', e => {
+  if (!document.getElementById('screen-multi-host').classList.contains('active')) return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === 'Backspace') {
+    e.preventDefault();
+    const pos = _mhActiveCell > 0 ? _mhActiveCell - 1 : 0;
+    _mhActiveCell = pos;
+    _mhMatrix[pos] = '';
+    renderMhMatrix();
+    return;
+  }
+  if (!VALID_LETTERS.test(e.key)) return;
+  if (_mhActiveCell >= 9) return;
+  e.preventDefault();
+  _mhMatrix[_mhActiveCell] = normalizeLetter(e.key);
+  _mhActiveCell = Math.min(_mhActiveCell + 1, 9);
+  renderMhMatrix();
+});
+
+const _mhKbInp = document.getElementById('mh-keyboard-input');
+_mhKbInp.addEventListener('blur', () => { _mhKbInp.style.pointerEvents = 'none'; });
+_mhKbInp.addEventListener('input', () => {
+  const ch = _mhKbInp.value.slice(-1);
+  _mhKbInp.value = '';
+  if (!ch || !VALID_LETTERS.test(ch)) return;
+  if (_mhActiveCell >= 9) return;
+  _mhMatrix[_mhActiveCell] = normalizeLetter(ch);
+  _mhActiveCell = Math.min(_mhActiveCell + 1, 9);
+  renderMhMatrix();
+});
+
+// Davet et paneli
+document.getElementById('btn-mh-invite').addEventListener('click', () => {
+  const panel = document.getElementById('mh-invite-panel');
+  panel.hidden = !panel.hidden;
+});
+
+document.getElementById('btn-mh-inv-open').addEventListener('click', () => {
+  document.getElementById('mh-invite-panel').hidden = true;
+  socket.emit('grp_set_invite_mode', { code: _grpCode, mode: 'open' });
+  showToast('Oda açık listeye eklendi. Oyuncular katılım isteği gönderebilir.', 4000);
+});
+
+document.getElementById('btn-mh-inv-code').addEventListener('click', () => {
+  document.getElementById('mh-invite-panel').hidden = true;
+  socket.emit('grp_set_invite_mode', { code: _grpCode, mode: 'code' });
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(_grpCode).then(() => showToast(`Kod kopyalandı: ${_grpCode}`, 4000)).catch(() => {});
+  }
+  showToast(`Oda kodu: ${_grpCode} — arkadaşlarınla paylaş!`, 5000);
+});
+
+document.getElementById('btn-mh-inv-friends').addEventListener('click', async () => {
+  document.getElementById('mh-invite-panel').hidden = true;
+  // Online arkadaşları yükle
+  const res = await fetch('/api/friends', { headers: { Authorization: 'Bearer ' + localStorage.getItem(TOKEN_KEY) } });
+  const friends = await res.json();
+  const online = friends.filter(f => f.online);
+  const list = document.getElementById('mhf-list');
+  _grpSelectedFriendIds.clear();
+  if (online.length === 0) {
+    list.innerHTML = '<p style="color:var(--text-dim);font-size:.9rem;text-align:center">Şu an çevrimiçi arkadaşın yok.</p>';
+  } else {
+    list.innerHTML = online.map(f =>
+      `<label class="mhf-friend-row">
+        <input type="checkbox" data-uid="${f.userId}" onchange="if(this.checked)_grpSelectedFriendIds.add(${f.userId});else _grpSelectedFriendIds.delete(${f.userId})">
+        <span class="mhf-friend-name">${f.username}</span>
+      </label>`
+    ).join('');
+  }
+  document.getElementById('mh-friends-popup').hidden = false;
+});
+
+window._grpSelectedFriendIds = _grpSelectedFriendIds;
+
+document.getElementById('btn-mhf-cancel').addEventListener('click', () => {
+  document.getElementById('mh-friends-popup').hidden = true;
+});
+
+document.getElementById('btn-mhf-send').addEventListener('click', () => {
+  document.getElementById('mh-friends-popup').hidden = true;
+  const ids = [..._grpSelectedFriendIds];
+  if (ids.length === 0) { showToast('Hiç arkadaş seçmedin.', 3000); return; }
+  socket.emit('grp_invite_friends', { code: _grpCode, friendIds: ids });
+});
+
+// Başlat
+document.getElementById('btn-mh-start').addEventListener('click', () => {
+  if (_mhMatrix.some(l => !l)) { showToast('Önce tüm 9 hücreyi doldur.', 3000); return; }
+  document.getElementById('btn-mh-start').disabled = true;
+  socket.emit('grp_start', { code: _grpCode, matrix: [..._mhMatrix], duration: _mhDuration });
+});
+
+// Bekleme ekranı
+document.getElementById('btn-mw-leave').addEventListener('click', () => {
+  socket.emit('grp_leave');
+  _grpCode = '';
+  showScreen('screen-lobby');
+});
+
+// Grup sonuç
+document.getElementById('btn-grp-to-lobby').addEventListener('click', () => {
+  mode = 'solo';
+  _grpCode = '';
+  renderLobby();
+  showScreen('screen-lobby');
+});
+
+// Gelen grup daveti
+let _grpIncomingCode = '';
+
+socket.on('grp_friend_invite', ({ code, fromName }) => {
+  _grpIncomingCode = code;
+  document.getElementById('grp-invite-from').textContent = fromName;
+  document.getElementById('grp-invite-popup').hidden = false;
+});
+
+document.getElementById('btn-grp-invite-accept').addEventListener('click', () => {
+  document.getElementById('grp-invite-popup').hidden = true;
+  if (!_grpIncomingCode) return;
+  socket.emit('grp_join', { code: _grpIncomingCode });
+  _grpIncomingCode = '';
+});
+
+document.getElementById('btn-grp-invite-decline').addEventListener('click', () => {
+  document.getElementById('grp-invite-popup').hidden = true;
+  _grpIncomingCode = '';
+});
+
+// Socket olayları — Grup
+socket.on('grp_created', ({ code }) => {
+  setupHostScreen(code);
+});
+
+socket.on('grp_join_error', ({ error }) => {
+  const errEl = document.getElementById('multi-join-error');
+  if (errEl) errEl.textContent = error;
+  showToast(error, 4000);
+  showScreen('screen-multi-lobby');
+});
+
+socket.on('grp_approved', ({ code, hostName }) => {
+  _grpCode = code;
+  _grpHostName = hostName || '—';
+  document.getElementById('mw-host-name').textContent = hostName || '—';
+  document.getElementById('mw-code').textContent = code;
+  document.getElementById('mw-status').textContent = 'Oda sahibinin oyunu başlatması bekleniyor...';
+  showScreen('screen-multi-wait');
+});
+
+socket.on('grp_waiting_approval', () => {
+  document.getElementById('mw-status').textContent = 'Oda sahibinin onayı bekleniyor...';
+  showScreen('screen-multi-wait');
+});
+
+socket.on('grp_rejected', () => {
+  showToast('Oda sahibi katılımını reddetti.', 4000);
+  _grpCode = '';
+  showScreen('screen-multi-lobby');
+});
+
+socket.on('grp_host_left', () => {
+  showToast('Oda sahibi odayı kapattı.', 4000);
+  mode = 'solo';
+  _grpCode = '';
+  showScreen('screen-lobby');
+});
+
+socket.on('grp_mode_set', ({ mode: invMode }) => {
+  const labels = { open: 'Açık moda geçildi', code: 'Kod modu aktif' };
+  showToast(labels[invMode] || 'Mod güncellendi', 3000);
+});
+
+socket.on('grp_invites_sent', ({ count }) => {
+  showToast(count > 0 ? `${count} arkadaşa davet gönderildi!` : 'Hiç davet gönderilemedi.', 3000);
+});
+
+socket.on('grp_players_update', ({ players }) => {
+  // Host ekranı
+  if (document.getElementById('screen-multi-host').classList.contains('active')) {
+    const list = document.getElementById('mh-players-list');
+    list.innerHTML = players.map((p, i) =>
+      `<div class="mh-player-row"><span class="mh-player-name">${p.displayName}</span>${i === 0 ? '<span class="mh-player-badge">Oda Sahibi</span>' : ''}</div>`
+    ).join('');
+    document.getElementById('mh-player-count').textContent = players.length;
+  }
+  // Bekleme ekranı
+  if (document.getElementById('screen-multi-wait').classList.contains('active')) {
+    const list = document.getElementById('mw-players-list');
+    list.innerHTML = players.map(p => `<div class="mw-player-chip">${p.displayName}</div>`).join('');
+  }
+});
+
+socket.on('grp_join_request', ({ socketId, displayName }) => {
+  const pending = document.getElementById('mh-pending-list');
+  const section = document.getElementById('mh-pending-section');
+  section.hidden = false;
+  const row = document.createElement('div');
+  row.className = 'mh-pending-row';
+  row.id = `pending-${socketId}`;
+  row.innerHTML = `<span class="mh-player-name">${displayName}</span>
+    <div class="mh-pending-actions">
+      <button class="btn-grp-accept" onclick="grpApprove('${socketId}', true)">✓ Kabul</button>
+      <button class="btn-grp-reject" onclick="grpApprove('${socketId}', false)">✕ Reddet</button>
+    </div>`;
+  pending.appendChild(row);
+});
+
+window.grpApprove = (socketId, approve) => {
+  socket.emit('grp_approve', { code: _grpCode, targetSocketId: socketId, approve });
+  document.getElementById(`pending-${socketId}`)?.remove();
+  if (document.querySelectorAll('.mh-pending-row').length === 0) {
+    document.getElementById('mh-pending-section').hidden = true;
+  }
+};
+
+socket.on('grp_player_joined', ({ displayName, playerCount }) => {
+  document.getElementById('mh-player-count').textContent = playerCount;
+  showToast(`${displayName} odaya katıldı!`, 3000);
+});
+
+// Oyun başlangıcı
+socket.on('grp_started', ({ matrix, duration }) => {
+  mode = 'group';
+  state.matrix = matrix;
+  setGameDuration(duration);
+  renderGameMatrix(onTileClick);
+  clearCurrentWord();
+  updateWordDisplay();
+  updateTimer(duration);
+  updateScore();
+  document.getElementById('words-list').innerHTML = '';
+  document.getElementById('btn-extend-time').hidden = true;
+  document.getElementById('multi-result').hidden = true;
+  document.getElementById('result-words-section').hidden = false;
+  showScreen('screen-game');
+  showCountdownOverlay(true);
+});
+
+socket.on('grp_countdown', ({ n }) => {
+  updateCountdown(n);
+  playWarningBeep();
+});
+
+socket.on('grp_game_start', () => {
+  showCountdownOverlay(false);
+  state.phase = PHASES.PLAYING;
+  updateTimer(_gameDuration);
+  bindGameEvents();
+  requestWakeLock();
+});
+
+socket.on('grp_timer_tick', ({ timeLeft }) => {
+  clearInterval(_localTimerInterval);
+  updateTimer(timeLeft);
+  _playTimerSound(timeLeft);
+  let t = timeLeft - 1;
+  _localTimerInterval = setInterval(() => {
+    if (t >= 0) { updateTimer(t); _playTimerSound(t); t--; }
+    else clearInterval(_localTimerInterval);
+  }, 1000);
+});
+
+socket.on('grp_word_result', result => {
+  if (result.status === 'valid') playWordFound();
+  else if (result.status === 'invalid') playInvalidWord();
+  showWordFeedback(result.status, result.word, result.points);
+  clearCurrentWord();
+  updateGameMatrix();
+  updateWordDisplay();
+  if (result.status === 'valid') {
+    updateScore();
+    addWordToPanel({ word: result.word, points: result.points, valid: true });
+  } else if (result.status === 'invalid' || result.status === 'duplicate') {
+    addWordToPanel({ word: result.word, points: 0, valid: false });
+  }
+});
+
+socket.on('grp_ended', ({ rankings, words }) => {
+  clearInterval(_localTimerInterval);
+  state.phase = PHASES.RESULT;
+  removeGameEvents();
+  releaseWakeLock();
+  renderGroupResult(rankings, words);
+  showScreen('screen-group-result');
+});
+
+function renderGroupResult(rankings, words) {
+  // Sıralama
+  const rankingsEl = document.getElementById('grp-rankings');
+  const medals = ['🥇', '🥈', '🥉'];
+  rankingsEl.innerHTML = rankings.map((p, i) =>
+    `<div class="grp-rank-row rank-${Math.min(i + 1, 4)}">
+      <span class="grp-rank-badge">${medals[i] || (i + 1) + '.'}</span>
+      <span class="grp-rank-name">${p.displayName}</span>
+      <span class="grp-rank-score">${p.score} puan</span>
+    </div>`
+  ).join('');
+
+  // Kelimeler
+  document.getElementById('grp-words-count').textContent = `${words.length} kelime`;
+  const list = document.getElementById('grp-words-list');
+  list.innerHTML = '';
+  words.forEach(({ word }) => {
+    const li = document.createElement('li');
+    li.className = 'valid';
+    const btn = document.createElement('button');
+    btn.className = 'word-meaning-btn';
+    btn.textContent = word;
+    btn.addEventListener('click', () => showMeaning(word));
+    li.appendChild(btn);
+    const pts = document.createElement('span');
+    pts.className = 'word-points';
+    pts.textContent = word.length + ' harf';
+    li.appendChild(pts);
+    list.appendChild(li);
+  });
+}
+
 // ─── Sekme kapanınca / sayfa yenilenince kasıtlı çıkış bildir ─
 
 window.addEventListener('beforeunload', () => {
-  if (mode === 'multi' && socket.connected) {
-    socket.volatile.emit('leave_game');
-  }
+  if (mode === 'multi' && socket.connected) socket.volatile.emit('leave_game');
+  if (mode === 'group' && socket.connected) socket.volatile.emit('grp_leave');
 });
 
 // ─── Başlat ──────────────────────────────────────────────────

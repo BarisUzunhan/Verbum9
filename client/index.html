@@ -134,10 +134,10 @@
           <div class="mode-title">Günlük Oyun</div>
           <div class="mode-desc">Herkesle aynı harfler</div>
         </div>
-        <div class="mode-card locked" id="mode-class">
-          <div class="mode-icon">🏫</div>
+        <div class="mode-card" id="mode-multi">
+          <div class="mode-icon">👥</div>
           <div class="mode-title">Çoklu Mod</div>
-          <div class="mode-badge">Yakında</div>
+          <div class="mode-desc">3-8 oyuncu, aynı harfler</div>
         </div>
       </div>
     </div>
@@ -516,6 +516,151 @@
       <div class="exit-confirm-actions">
         <button id="btn-invite-accept" class="btn-primary">Kabul Et</button>
         <button id="btn-invite-decline" class="btn-secondary">Reddet</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EKRAN: Çoklu Mod Lobisi -->
+  <div id="screen-multi-lobby" class="screen">
+    <div class="friends-header">
+      <button id="btn-multi-back" class="btn-nav-home">← Lobi</button>
+      <h2 class="friends-title">Çoklu Oyun</h2>
+      <div style="width:80px"></div>
+    </div>
+    <div class="multi-lobby-body">
+      <div class="multi-join-box">
+        <p class="multi-join-label">Oda kodun var mı?</p>
+        <div class="multi-code-row">
+          <input type="tel" id="multi-code-input" placeholder="6 haneli kod" maxlength="6" pattern="[0-9]*" inputmode="numeric">
+          <button class="btn-primary" id="btn-multi-join-code">Katıl</button>
+        </div>
+        <p id="multi-join-error" class="auth-error"></p>
+      </div>
+      <div class="multi-or">veya</div>
+      <button class="btn-primary multi-create-btn" id="btn-multi-create">+ Yeni Oyun Kur</button>
+      <div id="multi-open-section" hidden>
+        <div class="multi-section-title">Açık Odalar</div>
+        <div id="multi-open-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- POPUP: Görünen Ad -->
+  <div id="multi-name-popup" class="exit-confirm" hidden>
+    <div class="exit-confirm-backdrop"></div>
+    <div class="exit-confirm-content" style="max-width:360px">
+      <p class="exit-confirm-text" style="margin-bottom:6px">Görünen Adın</p>
+      <p style="color:var(--text-dim);font-size:.85rem;margin-bottom:14px">Diğer oyuncular seni bu isimle görecek.</p>
+      <input id="multi-display-name" type="text" placeholder="Adın (maks. 20 karakter)" maxlength="20"
+        style="width:100%;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:var(--surface2);color:var(--text);font-size:1rem;outline:none;margin-bottom:8px">
+      <p id="multi-name-error" class="auth-error"></p>
+      <div class="exit-confirm-actions">
+        <button id="btn-multi-name-cancel" class="btn-secondary">İptal</button>
+        <button id="btn-multi-name-confirm" class="btn-primary">Devam →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EKRAN: Oda Kurulum (Host) -->
+  <div id="screen-multi-host" class="screen">
+    <div class="mh-nav">
+      <div class="mh-code-badge">
+        <span class="mh-code-label">Oda Kodu</span>
+        <span class="mh-code-val" id="mh-code-val">——</span>
+      </div>
+      <button id="btn-mh-close" class="btn-secondary mh-close-btn">✕ Kapat</button>
+    </div>
+    <div class="mh-body">
+      <div class="mh-fill-section">
+        <p class="mh-label">9 harf seç</p>
+        <div id="mh-matrix" class="matrix-grid fill-mode mh-matrix"></div>
+        <div class="mh-fill-btns">
+          <button class="btn-secondary mh-btn" id="btn-mh-rand-one">🎲 Bu Hücre</button>
+          <button class="btn-secondary mh-btn" id="btn-mh-rand-all">🎲 Tümünü</button>
+        </div>
+        <div class="mh-duration-row">
+          <span class="mh-dur-label">Süre:</span>
+          <button class="mh-dur-btn" data-dur="120">2 dk</button>
+          <button class="mh-dur-btn mh-dur-active" data-dur="180">3 dk</button>
+          <button class="mh-dur-btn" data-dur="240">4 dk</button>
+          <button class="mh-dur-btn" data-dur="300">5 dk</button>
+        </div>
+      </div>
+      <div class="mh-players-section">
+        <div class="mh-section-title">Oyuncular (<span id="mh-player-count">1</span>)</div>
+        <div id="mh-players-list"></div>
+        <div id="mh-pending-section" hidden>
+          <div class="mh-section-title" style="margin-top:10px">Onay Bekliyor</div>
+          <div id="mh-pending-list"></div>
+        </div>
+      </div>
+      <div class="mh-invite-wrap">
+        <button class="btn-secondary mh-invite-btn" id="btn-mh-invite">👥 Davet Et ▾</button>
+        <div id="mh-invite-panel" class="mh-invite-panel" hidden>
+          <button class="mh-inv-opt" id="btn-mh-inv-open">👥 İsteyen girebilsin</button>
+          <button class="mh-inv-opt" id="btn-mh-inv-code">🔑 Kodu paylaş</button>
+          <button class="mh-inv-opt" id="btn-mh-inv-friends">⚡ Arkadaşlarımı davet et</button>
+        </div>
+      </div>
+      <button class="btn-primary btn-large mh-start-btn" id="btn-mh-start" disabled>Oyunu Başlat</button>
+    </div>
+    <input id="mh-keyboard-input" type="text" inputmode="text" autocomplete="off" autocorrect="off"
+      autocapitalize="characters" aria-hidden="true" tabindex="-1"
+      style="position:fixed;left:-9999px;pointer-events:none">
+  </div>
+
+  <!-- POPUP: Grup Arkadaş Seçimi -->
+  <div id="mh-friends-popup" class="exit-confirm" hidden>
+    <div class="exit-confirm-backdrop"></div>
+    <div class="exit-confirm-content" style="max-width:400px;max-height:70vh;overflow-y:auto">
+      <p class="exit-confirm-text" style="margin-bottom:12px">Arkadaşlarını Davet Et</p>
+      <p style="color:var(--text-dim);font-size:.85rem;margin-bottom:12px">Çevrimiçi arkadaşlarından seçebilirsin.</p>
+      <div id="mhf-list"></div>
+      <div class="exit-confirm-actions" style="margin-top:12px">
+        <button id="btn-mhf-cancel" class="btn-secondary">İptal</button>
+        <button id="btn-mhf-send" class="btn-primary">Davet Gönder</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EKRAN: Bekleme (Katılımcı) -->
+  <div id="screen-multi-wait" class="screen">
+    <div class="mw-body">
+      <div class="mw-icon">⏳</div>
+      <h2 class="mw-title">Oyun Başlamak Üzere</h2>
+      <p class="mw-host-label">Oda sahibi: <strong id="mw-host-name">—</strong></p>
+      <div class="mw-code-label">Oda Kodu: <strong id="mw-code">—</strong></div>
+      <div class="mh-section-title" style="margin-top:16px">Oyuncular</div>
+      <div id="mw-players-list" class="mw-players-list"></div>
+      <p id="mw-status" class="mw-status"></p>
+      <button class="btn-secondary" id="btn-mw-leave">Ayrıl</button>
+    </div>
+  </div>
+
+  <!-- EKRAN: Grup Sonuç -->
+  <div id="screen-group-result" class="screen">
+    <div class="grp-result-body">
+      <h2 class="grp-result-title">Oyun Bitti!</h2>
+      <div class="grp-rankings" id="grp-rankings"></div>
+      <div class="grp-words-section">
+        <div class="grp-words-header">
+          Bulunan Kelimeler <span id="grp-words-count" class="missed-count"></span>
+        </div>
+        <ul id="grp-words-list" class="words-list result-mode"></ul>
+      </div>
+      <button class="btn-primary" id="btn-grp-to-lobby">Ana Menü</button>
+    </div>
+  </div>
+
+  <!-- Grup Oyun Daveti Popup -->
+  <div id="grp-invite-popup" class="exit-confirm" hidden>
+    <div class="exit-confirm-backdrop"></div>
+    <div class="exit-confirm-content">
+      <div class="invite-icon">👥</div>
+      <p class="exit-confirm-text"><strong id="grp-invite-from">—</strong> seni çoklu oyuna davet ediyor!</p>
+      <div class="exit-confirm-actions">
+        <button id="btn-grp-invite-accept" class="btn-primary">Katıl!</button>
+        <button id="btn-grp-invite-decline" class="btn-secondary">Hayır</button>
       </div>
     </div>
   </div>
