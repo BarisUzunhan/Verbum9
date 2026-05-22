@@ -4,9 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Verbum9</title>
-  <link rel="stylesheet" href="css/style.css?v=0.6">
+  <link rel="stylesheet" href="css/style.css?v=0.7">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
 </head>
 <body>
+
+  <!-- Animasyonlu arka plan blobları -->
+  <div id="bg-canvas" aria-hidden="true">
+    <div class="bg-blob bg-blob-1"></div>
+    <div class="bg-blob bg-blob-2"></div>
+    <div class="bg-blob bg-blob-3"></div>
+  </div>
 
   <!-- EKRAN: Giriş / Kayıt -->
   <div id="screen-auth" class="screen active">
@@ -478,10 +488,20 @@
       <button id="btn-close-settings" class="settings-close">✕</button>
       <h3 class="settings-title">Ayarlar</h3>
       <div class="settings-row">
-        <span class="settings-label">Tema</span>
+        <span class="settings-label">Görünüm</span>
         <div class="toggle-group">
-          <button id="btn-theme-dark" class="toggle-btn active" data-theme="dark">Koyu</button>
-          <button id="btn-theme-light" class="toggle-btn" data-theme="light">Açık</button>
+          <button id="btn-theme-dark" class="toggle-btn active" data-mode="dark">Koyu</button>
+          <button id="btn-theme-light" class="toggle-btn" data-mode="light">Açık</button>
+        </div>
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">Renk</span>
+        <div class="theme-swatches">
+          <button class="theme-swatch active" data-color="default" title="Standart" style="background:#e94560"></button>
+          <button class="theme-swatch" data-color="nebula" title="Nebula" style="background:#a855f7"></button>
+          <button class="theme-swatch" data-color="ember" title="Ember" style="background:#c99533"></button>
+          <button class="theme-swatch" data-color="crt-green" title="CRT Yeşil" style="background:#00e63b;border-radius:2px"></button>
+          <button class="theme-swatch" data-color="crt-amber" title="CRT Amber" style="background:#e6a000;border-radius:2px"></button>
         </div>
       </div>
       <div class="settings-row">

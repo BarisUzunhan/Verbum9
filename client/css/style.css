@@ -42,11 +42,12 @@ body.light {
 
 html, body {
   height: 100%;
-  background: var(--bg);
+  background: transparent;
   color: var(--text);
   font-family: 'Segoe UI', system-ui, sans-serif;
   overflow: hidden;
 }
+
 
 /* ── EKRANLAR ─────────────────────────────── */
 
@@ -2679,3 +2680,336 @@ html, body {
 }
 
 .mhf-friend-name { font-size: .95rem; }
+
+/* ════════════════════════════════════════════
+   TEMA SİSTEMİ
+   ════════════════════════════════════════════ */
+
+/* ── NEBULA ────────────────────────────────── */
+body.theme-nebula {
+  --bg:        #0d0015;
+  --surface:   #160a2a;
+  --surface2:  #1e0f38;
+  --tile:      #2a1050;
+  --tile-hover:#3d1875;
+  --tile-used: #0d0825;
+  --accent:    #a855f7;
+  --accent2:   #06b6d4;
+  --text-dim:  #8a70b0;
+}
+body.theme-nebula.light {
+  --bg:        #f0eafa;
+  --surface:   #ffffff;
+  --surface2:  #e8dffa;
+  --tile:      #ddd0f5;
+  --tile-hover:#c8b8e8;
+  --tile-used: #b5a0d8;
+  --text:      #1a0a30;
+  --text-dim:  #5a4080;
+}
+
+/* ── EMBER ─────────────────────────────────── */
+body.theme-ember {
+  --bg:        #080808;
+  --surface:   #100e07;
+  --surface2:  #1a1608;
+  --tile:      #1e1a08;
+  --tile-hover:#2a2410;
+  --tile-used: #0a0800;
+  --accent:    #c99533;
+  --accent2:   #e8b84b;
+  --text-dim:  #806040;
+}
+body.theme-ember.light {
+  --bg:        #f5efe0;
+  --surface:   #fffdf5;
+  --surface2:  #f0e8d0;
+  --tile:      #e8dcc0;
+  --tile-hover:#d8c8a0;
+  --tile-used: #c8b490;
+  --text:      #1a1000;
+  --text-dim:  #6a5020;
+}
+
+/* ── CRT YEŞİL ─────────────────────────────── */
+body.theme-crt-green {
+  --bg:        #000800;
+  --surface:   #000d00;
+  --surface2:  #001500;
+  --tile:      #001a00;
+  --tile-hover:#002a00;
+  --tile-used: #000500;
+  --accent:    #00e63b;
+  --accent2:   #00cc33;
+  --gold:      #00e63b;
+  --green:     #00e63b;
+  --red:       #00e63b;
+  --text:      #00e63b;
+  --text-dim:  #006622;
+  --radius:    0px;
+  font-family: 'VT323', 'Courier New', monospace;
+}
+body.theme-crt-green * {
+  font-family: 'VT323', 'Courier New', monospace !important;
+  border-radius: 0 !important;
+}
+body.theme-crt-green::after {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent 0px, transparent 2px, rgba(0,0,0,0.14) 2px, rgba(0,0,0,0.14) 4px);
+  pointer-events: none;
+  z-index: 99999;
+}
+body.theme-crt-green::before {
+  content: '';
+  position: fixed; inset: 0;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0,6,0,0.6) 83%, rgba(0,0,0,0.9) 100%);
+  pointer-events: none;
+  z-index: 99998;
+}
+body.theme-crt-green .auth-card,
+body.theme-crt-green .settings-content {
+  border: 2px solid #00e63b !important;
+  box-shadow: 0 0 8px rgba(0,230,59,0.3), inset 0 0 25px rgba(0,230,59,0.03) !important;
+}
+body.theme-crt-green .btn-primary {
+  background: transparent !important;
+  border: 2px solid #00e63b !important;
+  color: #00e63b !important;
+  box-shadow: 0 0 8px rgba(0,230,59,0.2) !important;
+  letter-spacing: 3px;
+}
+body.theme-crt-green .btn-primary::before { content: '[ '; }
+body.theme-crt-green .btn-primary::after  { content: ' ]'; }
+body.theme-crt-green .auth-logo {
+  color: #00e63b !important;
+  -webkit-text-fill-color: #00e63b !important;
+  text-shadow: 0 0 6px #00e63b, 0 0 14px rgba(0,230,59,0.45) !important;
+  letter-spacing: 10px !important;
+}
+body.theme-crt-green .tile {
+  text-shadow: 0 0 5px rgba(0,230,59,0.6);
+}
+/* CRT Yeşil — Açık (kağıt terminal) */
+body.theme-crt-green.light {
+  --bg:        #f0ece0;
+  --surface:   #e8e4d0;
+  --surface2:  #ddd8c0;
+  --tile:      #d0cbb0;
+  --tile-hover:#c0baa0;
+  --tile-used: #b0ab90;
+  --text:      #003d12;
+  --text-dim:  #005a1a;
+  --accent:    #003d12;
+  --accent2:   #005a1a;
+}
+body.theme-crt-green.light::after,
+body.theme-crt-green.light::before { display: none; }
+body.theme-crt-green.light .auth-card,
+body.theme-crt-green.light .settings-content {
+  border: 2px solid #003d12 !important;
+  box-shadow: 3px 3px 0 #003d12 !important;
+}
+body.theme-crt-green.light .btn-primary {
+  background: transparent !important;
+  border: 2px solid #003d12 !important;
+  color: #003d12 !important;
+  box-shadow: 2px 2px 0 #003d12 !important;
+}
+body.theme-crt-green.light .auth-logo {
+  color: #003d12 !important;
+  -webkit-text-fill-color: #003d12 !important;
+  text-shadow: none !important;
+}
+body.theme-crt-green.light .tile { text-shadow: none; }
+
+/* ── CRT AMBER ──────────────────────────────── */
+body.theme-crt-amber {
+  --bg:        #0a0800;
+  --surface:   #120e00;
+  --surface2:  #1a1400;
+  --tile:      #201800;
+  --tile-hover:#2c2200;
+  --tile-used: #080600;
+  --accent:    #e6a000;
+  --accent2:   #cc8c00;
+  --gold:      #e6a000;
+  --red:       #e6a000;
+  --text:      #e6a000;
+  --text-dim:  #7a5a00;
+  --radius:    0px;
+  font-family: 'VT323', 'Courier New', monospace;
+}
+body.theme-crt-amber * {
+  font-family: 'VT323', 'Courier New', monospace !important;
+  border-radius: 0 !important;
+}
+body.theme-crt-amber::after {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent 0px, transparent 2px, rgba(0,0,0,0.14) 2px, rgba(0,0,0,0.14) 4px);
+  pointer-events: none;
+  z-index: 99999;
+}
+body.theme-crt-amber::before {
+  content: '';
+  position: fixed; inset: 0;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(8,6,0,0.6) 83%, rgba(0,0,0,0.9) 100%);
+  pointer-events: none;
+  z-index: 99998;
+}
+body.theme-crt-amber .auth-card,
+body.theme-crt-amber .settings-content {
+  border: 2px solid #e6a000 !important;
+  box-shadow: 0 0 8px rgba(230,160,0,0.3), inset 0 0 25px rgba(230,160,0,0.03) !important;
+}
+body.theme-crt-amber .btn-primary {
+  background: transparent !important;
+  border: 2px solid #e6a000 !important;
+  color: #e6a000 !important;
+  box-shadow: 0 0 8px rgba(230,160,0,0.2) !important;
+  letter-spacing: 3px;
+}
+body.theme-crt-amber .btn-primary::before { content: '[ '; }
+body.theme-crt-amber .btn-primary::after  { content: ' ]'; }
+body.theme-crt-amber .auth-logo {
+  color: #e6a000 !important;
+  -webkit-text-fill-color: #e6a000 !important;
+  text-shadow: 0 0 6px #e6a000, 0 0 14px rgba(230,160,0,0.45) !important;
+  letter-spacing: 10px !important;
+}
+body.theme-crt-amber .tile {
+  text-shadow: 0 0 5px rgba(230,160,0,0.6);
+}
+/* CRT Amber — Açık */
+body.theme-crt-amber.light {
+  --bg:        #f0e8d0;
+  --surface:   #ece0c0;
+  --surface2:  #e0d4b0;
+  --tile:      #d4c8a0;
+  --tile-hover:#c8b880;
+  --tile-used: #b8a870;
+  --text:      #4a3000;
+  --text-dim:  #6a4800;
+  --accent:    #4a3000;
+  --accent2:   #6a4800;
+}
+body.theme-crt-amber.light::after,
+body.theme-crt-amber.light::before { display: none; }
+body.theme-crt-amber.light .auth-card,
+body.theme-crt-amber.light .settings-content {
+  border: 2px solid #4a3000 !important;
+  box-shadow: 3px 3px 0 #4a3000 !important;
+}
+body.theme-crt-amber.light .btn-primary {
+  background: transparent !important;
+  border: 2px solid #4a3000 !important;
+  color: #4a3000 !important;
+  box-shadow: 2px 2px 0 #4a3000 !important;
+}
+body.theme-crt-amber.light .auth-logo {
+  color: #4a3000 !important;
+  -webkit-text-fill-color: #4a3000 !important;
+  text-shadow: none !important;
+}
+body.theme-crt-amber.light .tile { text-shadow: none; }
+
+/* ── Tema Seçici Butonları ──────────────────── */
+.theme-swatches {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.theme-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  outline: none;
+  flex-shrink: 0;
+}
+.theme-swatch:hover { transform: scale(1.2); }
+.theme-swatch.active {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--text);
+}
+
+/* ════════════════════════════════════════════
+   ANİMASYONLU ARKA PLAN BLOBLAR
+   ════════════════════════════════════════════ */
+
+#bg-canvas {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+  background: var(--bg);
+}
+
+.bg-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(130px);
+  opacity: 0.11;
+  will-change: transform;
+}
+
+.bg-blob-1 {
+  width: min(680px, 90vw);
+  height: min(680px, 90vw);
+  background: var(--accent);
+  top: -20%;
+  left: -15%;
+  animation: blobDrift1 24s ease-in-out infinite;
+}
+
+.bg-blob-2 {
+  width: min(540px, 72vw);
+  height: min(540px, 72vw);
+  background: var(--accent2);
+  bottom: -18%;
+  right: -12%;
+  animation: blobDrift2 30s ease-in-out infinite;
+  animation-delay: -10s;
+}
+
+.bg-blob-3 {
+  width: min(420px, 55vw);
+  height: min(420px, 55vw);
+  background: var(--accent);
+  top: 50%;
+  left: 55%;
+  transform: translate(-50%, -50%);
+  opacity: 0.06;
+  animation: blobDrift3 38s ease-in-out infinite;
+  animation-delay: -18s;
+}
+
+@keyframes blobDrift1 {
+  0%,  100% { transform: translate(0,    0)    scale(1);    }
+  30%        { transform: translate(9vw,  7vh)  scale(1.07); }
+  65%        { transform: translate(4vw,  13vh) scale(0.94); }
+}
+
+@keyframes blobDrift2 {
+  0%,  100% { transform: translate(0,     0)     scale(1);    }
+  35%        { transform: translate(-8vw, -9vh)  scale(1.06); }
+  70%        { transform: translate(-4vw, -16vh) scale(0.93); }
+}
+
+@keyframes blobDrift3 {
+  0%,  100% { transform: translate(-50%, -50%) scale(1);    }
+  25%        { transform: translate(-60%, -44%) scale(1.08); }
+  55%        { transform: translate(-42%, -56%) scale(0.92); }
+  80%        { transform: translate(-54%, -42%) scale(1.04); }
+}
+
+/* Açık modda daha soluk bloblar */
+body.light .bg-blob   { opacity: 0.07; }
+body.light .bg-blob-3 { opacity: 0.04; }
+
+/* CRT temalarında blob yok — canvas kalır (bg rengi için), sadece bloblar gizlenir */
+body.theme-crt-green .bg-blob,
+body.theme-crt-amber .bg-blob { display: none; }

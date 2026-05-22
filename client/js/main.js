@@ -88,11 +88,26 @@ async function fetchMe() {
 let _soundEnabled = true;
 let _gameDuration = 120;
 
+function applyColorTheme(name) {
+  ['nebula', 'ember', 'crt-green', 'crt-amber'].forEach(t => {
+    document.body.classList.remove('theme-' + t);
+  });
+  if (name && name !== 'default') {
+    document.body.classList.add('theme-' + name);
+  }
+}
+
 function loadSettings() {
   const theme = localStorage.getItem('verbum9_theme') || 'dark';
   document.body.classList.toggle('light', theme === 'light');
   document.getElementById('btn-theme-dark').classList.toggle('active', theme !== 'light');
   document.getElementById('btn-theme-light').classList.toggle('active', theme === 'light');
+
+  const color = localStorage.getItem('verbum9_color') || 'default';
+  applyColorTheme(color);
+  document.querySelectorAll('[data-color]').forEach(b => {
+    b.classList.toggle('active', b.dataset.color === color);
+  });
 
   const sound = localStorage.getItem('verbum9_sound');
   _soundEnabled = sound !== '0';
@@ -220,6 +235,10 @@ function openSettings() {
   const isLight = document.body.classList.contains('light');
   document.getElementById('btn-theme-dark').classList.toggle('active', !isLight);
   document.getElementById('btn-theme-light').classList.toggle('active', isLight);
+  const color = localStorage.getItem('verbum9_color') || 'default';
+  document.querySelectorAll('[data-color]').forEach(b => {
+    b.classList.toggle('active', b.dataset.color === color);
+  });
   document.getElementById('setting-sound').checked = _soundEnabled;
   document.querySelectorAll('.duration-btn').forEach(btn => {
     btn.classList.toggle('active', parseInt(btn.dataset.dur) === _gameDuration);
@@ -239,14 +258,26 @@ function bindSettingsEvents() {
   document.getElementById('btn-settings-fill').addEventListener('click', openSettings);
   document.getElementById('btn-settings-game').addEventListener('click', openSettings);
 
-  // Tema
-  document.querySelectorAll('[data-theme]').forEach(btn => {
+  // Koyu/Açık modu
+  document.querySelectorAll('[data-mode]').forEach(btn => {
     btn.addEventListener('click', () => {
-      const isLight = btn.dataset.theme === 'light';
+      const isLight = btn.dataset.mode === 'light';
       document.body.classList.toggle('light', isLight);
       localStorage.setItem('verbum9_theme', isLight ? 'light' : 'dark');
       document.getElementById('btn-theme-dark').classList.toggle('active', !isLight);
       document.getElementById('btn-theme-light').classList.toggle('active', isLight);
+    });
+  });
+
+  // Renk teması
+  document.querySelectorAll('[data-color]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const color = btn.dataset.color;
+      applyColorTheme(color);
+      localStorage.setItem('verbum9_color', color);
+      document.querySelectorAll('[data-color]').forEach(b => {
+        b.classList.toggle('active', b.dataset.color === color);
+      });
     });
   });
 
