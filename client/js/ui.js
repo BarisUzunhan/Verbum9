@@ -156,11 +156,13 @@ export function addWordToPanel(wordObj) {
     li.appendChild(pts);
   } else {
     li.appendChild(document.createTextNode(wordObj.word));
-    const btn = document.createElement('button');
-    btn.className = 'btn-dispute';
-    btn.dataset.word = wordObj.word.toLocaleLowerCase('tr-TR');
-    btn.textContent = 'İtiraz Et';
-    li.appendChild(btn);
+    if (!wordObj.duplicate) {
+      const btn = document.createElement('button');
+      btn.className = 'btn-dispute';
+      btn.dataset.word = wordObj.word.toLocaleLowerCase('tr-TR');
+      btn.textContent = 'İtiraz Et';
+      li.appendChild(btn);
+    }
   }
 
   list.insertBefore(li, list.firstChild);

@@ -1243,6 +1243,7 @@ const onlineUsers = new Map();      // userId → { socket, name }
 const pendingInvites = new Map();   // inviteId → { fromSocket, fromName, fromToken, toUserId }
 const groupRooms = new Map();       // code → room
 const socketGroupRoom = new Map();  // socketId → code
+const userGroupRoom = new Map();    // userId → code (reconnect için kalıcı)
 
 // 1 dakikada bir süresi dolmuş sonuçları temizle
 setInterval(() => {
@@ -1415,25 +1416,48 @@ async function grpRoomEnd(room) {
   allWords.sort((a, b) => b.length - a.length || a.word.localeCompare(b.word, 'tr'));
   io.to(`grp_${room.code}`).emit('grp_ended', { rankings, words: allWords.slice(0, 100) });
   setTimeout(() => {
-    for (const p of room.players) socketGroupRoom.delete(p.socket.id);
-    for (const p of room.pendingPlayers) socketGroupRoom.delete(p.socket.id);
+    for (const p of room.players) {
+      if (p.socket) socketGroupRoom.delete(p.socket.id);
+      userGroupRoom.delete(String(p.userId));
+    }
+    for (const p of room.pendingPlayers) {
+      if (p.socket) socketGroupRoom.delete(p.socket.id);
+      userGroupRoom.delete(String(p.userId));
+    }
     groupRooms.delete(room.code);
   }, 5 * 60 * 1000);
 }
 
 function leaveGroupRoom(socket, room) {
-  const isHost = room.host.socket.id === socket.id;
-  room.players = room.players.filter(p => p.socket.id !== socket.id);
-  room.pendingPlayers = room.pendingPlayers.filter(p => p.socket.id !== socket.id);
+  const isHost = room.host.socket?.id === socket.id;
+  const playerInRoom = room.players.find(p => p.socket?.id === socket.id);
+
   socketGroupRoom.delete(socket.id);
   socket.leave(`grp_${room.code}`);
+
+  if (room.status === 'playing') {
+    // Oyun devam ederken: socket'i null yap, oyuncuyu koru (rejoin için)
+    if (playerInRoom) {
+      playerInRoom.socket = null;
+      if (isHost) room.host.socket = null;
+    }
+    return;
+  }
+
+  // Lobi: oyuncuyu listeden çıkar
+  if (playerInRoom) userGroupRoom.delete(String(playerInRoom.userId));
+  room.players = room.players.filter(p => p.socket?.id !== socket.id);
+  room.pendingPlayers = room.pendingPlayers.filter(p => p.socket?.id !== socket.id);
+
   if (isHost) {
-    io.to(`grp_${room.code}`).emit('grp_host_left');
+    io.to(`grp_${room.code}`).emit('grp_cancelled');
     clearInterval(room.timerInterval);
-    for (const p of room.players) socketGroupRoom.delete(p.socket.id);
-    for (const p of room.pendingPlayers) socketGroupRoom.delete(p.socket.id);
+    for (const p of [...room.players, ...room.pendingPlayers]) {
+      if (p.socket) socketGroupRoom.delete(p.socket.id);
+      userGroupRoom.delete(String(p.userId));
+    }
     groupRooms.delete(room.code);
-  } else if (room.status === 'lobby') {
+  } else {
     io.to(`grp_${room.code}`).emit('grp_players_update', {
       players: room.players.map(p => ({ displayName: p.displayName, userId: p.userId }))
     });
@@ -1557,6 +1581,13 @@ io.on('connection', socket => {
     if (!authToken) return;
     const user = await userService.getUserByToken(authToken);
     if (!user) return;
+    // Eski oda varsa temizle
+    const oldCode = socketGroupRoom.get(socket.id);
+    if (oldCode) {
+      const oldRoom = groupRooms.get(oldCode);
+      if (oldRoom) leaveGroupRoom(socket, oldRoom);
+      else socketGroupRoom.delete(socket.id);
+    }
     const name = ((displayName || '').trim() || user.username).slice(0, 20);
     const code = genGroupCode();
     const room = {
@@ -1567,6 +1598,7 @@ io.on('connection', socket => {
     };
     groupRooms.set(code, room);
     socketGroupRoom.set(socket.id, code);
+    userGroupRoom.set(String(user.id), code);
     socket.join(`grp_${code}`);
     socket.emit('grp_created', { code });
   });
@@ -1602,6 +1634,7 @@ io.on('connection', socket => {
     const playerData = { socket, userId: user.id, username: user.username, displayName: user.username, words: [], score: 0 };
     room.players.push(playerData);
     socketGroupRoom.set(socket.id, code);
+    userGroupRoom.set(String(user.id), code);
     socket.join(`grp_${code}`);
     socket.emit('grp_approved', { code, hostName: room.host.displayName });
     io.to(`grp_${code}`).emit('grp_players_update', {
@@ -1632,6 +1665,7 @@ io.on('connection', socket => {
     if (approve) {
       room.players.push({ ...player, words: [], score: 0 });
       socketGroupRoom.set(player.socket.id, code);
+      userGroupRoom.set(String(player.userId), code);
       player.socket.join(`grp_${code}`);
       player.socket.emit('grp_approved', { code, hostName: room.host.displayName });
       io.to(`grp_${code}`).emit('grp_players_update', {
@@ -1695,6 +1729,44 @@ io.on('connection', socket => {
     player.words.push(wordU);
     player.score += wordU.length;
     socket.emit('grp_word_result', { status: 'valid', word: wordU, points: wordU.length });
+  });
+
+  socket.on('grp_check_active', async () => {
+    if (!authToken) return socket.emit('grp_active_room', { active: false });
+    const user = await userService.getUserByToken(authToken);
+    if (!user) return socket.emit('grp_active_room', { active: false });
+    const code = userGroupRoom.get(String(user.id));
+    if (!code) return socket.emit('grp_active_room', { active: false });
+    const room = groupRooms.get(code);
+    if (!room || room.status !== 'playing') {
+      userGroupRoom.delete(String(user.id));
+      return socket.emit('grp_active_room', { active: false });
+    }
+    socket.emit('grp_active_room', { active: true, code, hostName: room.host.displayName, timeLeft: room.timeLeft });
+  });
+
+  socket.on('grp_rejoin', async ({ code }) => {
+    if (!authToken) return;
+    const user = await userService.getUserByToken(authToken);
+    if (!user) return;
+    const room = groupRooms.get(code);
+    if (!room || room.status !== 'playing')
+      return socket.emit('grp_join_error', { error: 'Oyun artık aktif değil.' });
+    const player = room.players.find(p => String(p.userId) === String(user.id));
+    if (!player)
+      return socket.emit('grp_join_error', { error: 'Bu oyunda kayıtlı değilsiniz.' });
+    if (player.socket?.id) socketGroupRoom.delete(player.socket.id);
+    player.socket = socket;
+    socketGroupRoom.set(socket.id, code);
+    userGroupRoom.set(String(user.id), code);
+    socket.join(`grp_${code}`);
+    if (String(room.host.userId) === String(user.id)) room.host.socket = socket;
+    socket.emit('grp_rejoin_ok', {
+      matrix: room.matrix,
+      duration: room.duration,
+      timeLeft: room.timeLeft,
+      score: player.score,
+    });
   });
 
   socket.on('grp_leave', () => {
@@ -1916,11 +1988,12 @@ io.on('connection', socket => {
       }
     }
 
-    // Grup odası temizliği
+    // Grup odası temizliği (oyun devam ediyorsa sadece socket'i kopar, oda canlı kalır)
     const grpCode = socketGroupRoom.get(socket.id);
     if (grpCode) {
       const grpRoom = groupRooms.get(grpCode);
       if (grpRoom) leaveGroupRoom(socket, grpRoom);
+      else socketGroupRoom.delete(socket.id);
     }
 
     closeRoom(socket);

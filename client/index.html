@@ -536,6 +536,7 @@
         </div>
         <p id="multi-join-error" class="auth-error"></p>
       </div>
+      <button class="btn-primary multi-create-btn" id="btn-grp-rejoin" hidden style="background:var(--accent2)">▶ Aktif Oyuna Dön</button>
       <div class="multi-or">veya</div>
       <button class="btn-primary multi-create-btn" id="btn-multi-create">+ Yeni Oyun Kur</button>
       <div id="multi-open-section" hidden>
@@ -647,6 +648,12 @@
           Bulunan Kelimeler <span id="grp-words-count" class="missed-count"></span>
         </div>
         <ul id="grp-words-list" class="words-list result-mode"></ul>
+      </div>
+      <div class="grp-words-section" id="grp-missed-section" hidden>
+        <div class="grp-words-header">
+          Kimsenin Bulamadığı <span id="grp-missed-count" class="missed-count"></span>
+        </div>
+        <ul id="grp-missed-list" class="words-list result-mode"></ul>
       </div>
       <button class="btn-primary" id="btn-grp-to-lobby">Ana Menü</button>
     </div>

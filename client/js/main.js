@@ -824,8 +824,9 @@ socket.on('word_result', result => {
       parseInt(document.getElementById('words-count-value').textContent || '0') + 1;
     addWordToPanel({ word: result.word, points: result.points, valid: true });
   } else if (result.status === 'invalid' || result.status === 'duplicate') {
-    addWordToPanel({ word: result.word, points: 0, valid: false });
-    mp.invalidWords.push(result.word);
+    const isDup = result.status === 'duplicate';
+    addWordToPanel({ word: result.word, points: 0, valid: false, duplicate: isDup });
+    if (!isDup) mp.invalidWords.push(result.word);
   }
 });
 
@@ -1813,7 +1814,9 @@ function goToMultiLobby() {
   showScreen('screen-multi-lobby');
   document.getElementById('multi-code-input').value = '';
   document.getElementById('multi-join-error').textContent = '';
+  document.getElementById('btn-grp-rejoin').hidden = true;
   loadOpenRooms();
+  socket.emit('grp_check_active');
 }
 
 async function loadOpenRooms() {
@@ -1897,7 +1900,7 @@ function setupHostScreen(code) {
   container.innerHTML = '';
   for (let i = 0; i < 9; i++) {
     const cell = document.createElement('div');
-    cell.className = 'matrix-cell fill-cell';
+    cell.className = 'tile';
     cell.dataset.pos = i;
     cell.addEventListener('click', () => {
       _mhActiveCell = i;
@@ -1930,10 +1933,10 @@ function setupHostScreen(code) {
 }
 
 function renderMhMatrix() {
-  const cells = document.querySelectorAll('#mh-matrix .matrix-cell');
+  const cells = document.querySelectorAll('#mh-matrix .tile');
   cells.forEach((cell, i) => {
     cell.textContent = _mhMatrix[i] || '';
-    cell.className = 'matrix-cell fill-cell' +
+    cell.className = 'tile' +
       (i === _mhActiveCell ? ' active' : '') +
       (_mhMatrix[i] ? ' filled' : '');
   });
@@ -1944,7 +1947,7 @@ function renderMhMatrix() {
 document.getElementById('btn-mh-close').addEventListener('click', () => {
   if (_grpCode) socket.emit('grp_leave');
   _grpCode = '';
-  showScreen('screen-lobby');
+  showScreen('screen-multi-lobby');
 });
 
 document.getElementById('btn-mh-rand-one').addEventListener('click', () => {
@@ -2059,11 +2062,17 @@ document.getElementById('btn-mh-start').addEventListener('click', () => {
   socket.emit('grp_start', { code: _grpCode, matrix: [..._mhMatrix], duration: _mhDuration });
 });
 
+// Aktif oyuna dön
+document.getElementById('btn-grp-rejoin').addEventListener('click', () => {
+  const code = document.getElementById('btn-grp-rejoin').dataset.code;
+  if (code) socket.emit('grp_rejoin', { code });
+});
+
 // Bekleme ekranı
 document.getElementById('btn-mw-leave').addEventListener('click', () => {
   socket.emit('grp_leave');
   _grpCode = '';
-  showScreen('screen-lobby');
+  showScreen('screen-multi-lobby');
 });
 
 // Grup sonuç
@@ -2127,11 +2136,21 @@ socket.on('grp_rejected', () => {
   showScreen('screen-multi-lobby');
 });
 
-socket.on('grp_host_left', () => {
-  showToast('Oda sahibi odayı kapattı.', 4000);
+socket.on('grp_cancelled', () => {
+  showToast('Oda sahibi oyunu iptal etti.', 4000);
   mode = 'solo';
   _grpCode = '';
-  showScreen('screen-lobby');
+  showScreen('screen-multi-lobby');
+});
+
+socket.on('grp_active_room', ({ active, code }) => {
+  const btn = document.getElementById('btn-grp-rejoin');
+  if (active && code) {
+    btn.hidden = false;
+    btn.dataset.code = code;
+  } else {
+    btn.hidden = true;
+  }
 });
 
 socket.on('grp_mode_set', ({ mode: invMode }) => {
@@ -2205,6 +2224,27 @@ socket.on('grp_started', ({ matrix, duration }) => {
   showCountdownOverlay(true);
 });
 
+socket.on('grp_rejoin_ok', ({ matrix, duration, timeLeft, score }) => {
+  mode = 'group';
+  state.matrix = matrix;
+  state.score = score;
+  setGameDuration(duration);
+  renderGameMatrix(onTileClick);
+  clearCurrentWord();
+  updateWordDisplay();
+  updateTimer(timeLeft);
+  updateScore();
+  document.getElementById('words-list').innerHTML = '';
+  document.getElementById('btn-extend-time').hidden = true;
+  document.getElementById('multi-result').hidden = true;
+  document.getElementById('result-words-section').hidden = false;
+  showScreen('screen-game');
+  showCountdownOverlay(false);
+  state.phase = PHASES.PLAYING;
+  bindGameEvents();
+  requestWakeLock();
+});
+
 socket.on('grp_countdown', ({ n }) => {
   updateCountdown(n);
   playWarningBeep();
@@ -2240,7 +2280,7 @@ socket.on('grp_word_result', result => {
     updateScore();
     addWordToPanel({ word: result.word, points: result.points, valid: true });
   } else if (result.status === 'invalid' || result.status === 'duplicate') {
-    addWordToPanel({ word: result.word, points: 0, valid: false });
+    addWordToPanel({ word: result.word, points: 0, valid: false, duplicate: result.status === 'duplicate' });
   }
 });
 
@@ -2249,11 +2289,13 @@ socket.on('grp_ended', ({ rankings, words }) => {
   state.phase = PHASES.RESULT;
   removeGameEvents();
   releaseWakeLock();
-  renderGroupResult(rankings, words);
+  const foundSet = new Set(words.map(w => w.word.toLocaleLowerCase('tr-TR')));
+  const missed = _findMissedForMatrix(state.matrix, foundSet);
+  renderGroupResult(rankings, words, missed);
   showScreen('screen-group-result');
 });
 
-function renderGroupResult(rankings, words) {
+function renderGroupResult(rankings, words, missed = []) {
   // Sıralama
   const rankingsEl = document.getElementById('grp-rankings');
   const medals = ['🥇', '🥈', '🥉'];
@@ -2265,7 +2307,7 @@ function renderGroupResult(rankings, words) {
     </div>`
   ).join('');
 
-  // Kelimeler
+  // Bulunan kelimeler
   document.getElementById('grp-words-count').textContent = `${words.length} kelime`;
   const list = document.getElementById('grp-words-list');
   list.innerHTML = '';
@@ -2283,6 +2325,29 @@ function renderGroupResult(rankings, words) {
     li.appendChild(pts);
     list.appendChild(li);
   });
+
+  // Kaçırılan kelimeler
+  const missedSection = document.getElementById('grp-missed-section');
+  const missedList = document.getElementById('grp-missed-list');
+  missedList.innerHTML = '';
+  if (missed.length > 0) {
+    missedSection.hidden = false;
+    const display = missed.slice(0, 100);
+    document.getElementById('grp-missed-count').textContent =
+      missed.length > 100 ? `${missed.length} kelime (ilk 100 gösteriliyor)` : `${missed.length} kelime`;
+    display.forEach(word => {
+      const li = document.createElement('li');
+      li.className = 'valid';
+      const btn = document.createElement('button');
+      btn.className = 'word-meaning-btn';
+      btn.textContent = word;
+      btn.addEventListener('click', () => showMeaning(word));
+      li.appendChild(btn);
+      missedList.appendChild(li);
+    });
+  } else {
+    missedSection.hidden = true;
+  }
 }
 
 // ─── Sekme kapanınca / sayfa yenilenince kasıtlı çıkış bildir ─

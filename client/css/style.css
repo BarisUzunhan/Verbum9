@@ -2340,6 +2340,12 @@ html, body {
 .multi-open-info { font-size: .83rem; color: var(--text-dim); }
 
 /* Host kurulum ekranı */
+#screen-multi-host {
+  justify-content: flex-start;
+  align-items: stretch;
+  padding: 0;
+}
+
 .mh-nav {
   display: flex;
   align-items: center;
@@ -2348,6 +2354,7 @@ html, body {
   background: var(--surface);
   border-bottom: 1px solid rgba(255,255,255,.06);
   flex-shrink: 0;
+  width: 100%;
 }
 
 .mh-code-badge {
