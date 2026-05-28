@@ -1,0 +1,56 @@
+{
+  "tr": {
+    "name": "Türkçe",
+    "locale": "tr-TR",
+    "minLength": 2,
+    "vowels": ["A","E","I","İ","O","Ö","U","Ü"],
+    "letterPool": "AAAAAAAAAAAEEEEEEEEEIIIIIIIINNNNNNNTTTTTTTKKKKKKLLLLLLRRRRRRMMMMMSSSSYYYYOOOODDDBBBUUUÜÜÇÇÇÖÖSŞZZHĞĞPPFVCGVAC",
+    "wordsFile": "words.json",
+    "ready": true
+  },
+  "en": {
+    "name": "English",
+    "locale": "en-US",
+    "minLength": 3,
+    "vowels": ["A","E","I","O","U"],
+    "letterPool": "EEEEEEEEEEEEEAAAAAAAAOOOOOOOOTTTTTTTTTIIIIIIIINNNNNNNSSSSSSHHHHHHRRRRRRDDDDDLLLLLLCCCUUUMMMWWWFFGGYYPBBVK",
+    "wordsFile": "words_en.json",
+    "ready": true
+  },
+  "de": {
+    "name": "Deutsch",
+    "locale": "de-DE",
+    "minLength": 3,
+    "vowels": ["A","E","I","O","U","Ä","Ö","Ü"],
+    "letterPool": "EEEEEEEEEEEENNNNNNNNNIIIIIIISSSSSSRRRRRRAAAAAAATTTTTTTDDDDDHHHHHUUUUULLLLLGGGGCCCCBBBBZZZZKKKKFFFÖÖÖÄÄÄÜÜÜWWWVVPP",
+    "wordsFile": "words_de.json",
+    "ready": false
+  },
+  "es": {
+    "name": "Español",
+    "locale": "es-ES",
+    "minLength": 3,
+    "vowels": ["A","E","I","O","U"],
+    "letterPool": "AAAAAAAAAAAEEEEEEEEEOOOOOOOIIIIIIIISSSSSSNNNNNNRRRRRRTTTTTTTLLLLLCCCCDDDDDDPPPUUUUMMMBBGGFFHHJJVVZÑ",
+    "wordsFile": "words_es.json",
+    "ready": false
+  },
+  "fr": {
+    "name": "Français",
+    "locale": "fr-FR",
+    "minLength": 3,
+    "vowels": ["A","E","I","O","U","É","À","Ê","Î","Ô","Û"],
+    "letterPool": "EEEEEEEEEEEEEAAAAAAAASSSSSSIIIIIIITTTTTTTNNNNNNRRRRRROUUUULLLLCCCDDDDMMMPPPPBBGGVFFHHJÉÀÀÊÎÇZZQ",
+    "wordsFile": "words_fr.json",
+    "ready": false
+  },
+  "pt": {
+    "name": "Português",
+    "locale": "pt-BR",
+    "minLength": 3,
+    "vowels": ["A","E","I","O","U","Ã","Â","Ê","Î","Ô","Û","Á","É","Í","Ó","Ú"],
+    "letterPool": "AAAAAAAAAAAEEEEEEEEEOOOOOOOIIIIIIIISSSSSSRRRRRRTTTTTTTNNNNNNDDDDDLLLLLUUUUMMMCCCBBGGFFHHJVZÃÇÕÂÊÉÁÍÓÚ",
+    "wordsFile": "words_pt.json",
+    "ready": false
+  }
+}
