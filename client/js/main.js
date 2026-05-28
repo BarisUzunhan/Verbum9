@@ -7,6 +7,7 @@ import {
   submitCurrentWord, findMissedWords,
   startCountdown, startGame, stopGame, restartTimer, resetToFill,
   setGameDuration,
+  setActiveLang, getActiveLang, getActiveLangConfig,
 } from './game.js';
 import { playWordFound, playWarningBeep, playUrgentBeep, playInvalidWord, setSoundEnabled } from './sounds.js';
 import {
@@ -119,6 +120,21 @@ function loadSettings() {
   setGameDuration(_gameDuration);
   document.querySelectorAll('.duration-btn').forEach(btn => {
     btn.classList.toggle('active', parseInt(btn.dataset.dur) === _gameDuration);
+  });
+}
+
+// ─── Dil seçici (ilk ziyaret) ────────────────────────────────
+
+function initLangPicker() {
+  const modal = document.getElementById('lang-picker-modal');
+  if (!localStorage.getItem('verbum_lang')) {
+    modal.hidden = false;
+  }
+  modal.querySelectorAll('.lang-picker-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setActiveLang(btn.dataset.lang);
+      modal.hidden = true;
+    });
   });
 }
 
@@ -244,6 +260,13 @@ function openSettings() {
     btn.classList.toggle('active', parseInt(btn.dataset.dur) === _gameDuration);
   });
 
+  const activeLang = getActiveLang();
+  document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', b.dataset.lang === activeLang));
+
+  // Dil satırı: sadece lobi/fill fazında değiştirilebilir
+  const canChangeLang = mode !== 'multi' || state.phase === PHASES.LOBBY;
+  document.getElementById('settings-lang-row').hidden = !canChangeLang;
+
   document.getElementById('settings-popup').hidden = false;
 }
 
@@ -291,6 +314,14 @@ function bindSettingsEvents() {
   // Süre — sabit 2 dakika, butonlar pasif
   document.querySelectorAll('.duration-btn').forEach(btn => {
     btn.disabled = true;
+  });
+
+  // Dil
+  document.querySelectorAll('.lang-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setActiveLang(btn.dataset.lang);
+      document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', b.dataset.lang === btn.dataset.lang));
+    });
   });
 
   // Tutorial
@@ -367,6 +398,7 @@ async function init() {
   bindHintEvents();
   bindExitEvents();
   bindSettingsEvents();
+  initLangPicker();
   initTutorial();
   onTutorialEnd('lobby', startDemoGame);
   onTutorialEnd('game', endDemoGame);
@@ -680,7 +712,7 @@ function goToOnline() {
   document.getElementById('waiting-status').textContent = 'Rakip aranıyor...';
   showScreen('screen-waiting');
   if (socket.connected) {
-    socket.emit('join_queue', { name: currentUser.username });
+    socket.emit('join_queue', { name: currentUser.username, lang: getActiveLang() });
   }
   socket.connect();
 }
@@ -700,7 +732,7 @@ socket.on('connect', () => {
   if (mode === 'multi' && currentUser) {
     const waiting = document.getElementById('screen-waiting');
     if (waiting && waiting.classList.contains('active')) {
-      socket.emit('join_queue', { name: currentUser.username });
+      socket.emit('join_queue', { name: currentUser.username, lang: getActiveLang() });
     }
   }
 });
@@ -709,12 +741,13 @@ socket.on('queued', () => {
   document.getElementById('waiting-status').textContent = 'Sırada bekleniyor...';
 });
 
-socket.on('matched', ({ opponentName, playerIndex, turnIndex }) => {
+socket.on('matched', ({ opponentName, playerIndex, turnIndex, lang }) => {
   mode = 'multi';
   mp.playerIndex = playerIndex;
   mp.turnIndex = turnIndex;
   mp.opponentName = opponentName;
   mp.myScore = 0;
+  if (lang) setActiveLang(lang);
   mp.invalidWords = [];
 
   state.matrix = Array(9).fill('');
@@ -1240,20 +1273,20 @@ function normalizeLetter(key) {
 
 // ─── Geri Sayım → Oyun ───────────────────────────────────────
 
-const _VOWELS_SET = new Set(['A', 'E', 'I', 'İ', 'O', 'Ö', 'U', 'Ü']);
-const _VOWELS_ARR = ['A', 'E', 'İ', 'I', 'O', 'U', 'Ö', 'Ü'];
-
 function beginCountdown() {
   document.removeEventListener('keydown', onFillKeydown);
 
   // Hiç sesli harf yoksa 2 rastgele sessiz harfi sesli harfle değiştir
-  const hasVowel = state.matrix.some(l => _VOWELS_SET.has(l));
+  const langCfg = getActiveLangConfig();
+  const vowelsSet = new Set(langCfg.vowels || ['A', 'E', 'I', 'İ', 'O', 'Ö', 'U', 'Ü']);
+  const vowelsArr = langCfg.vowels || ['A', 'E', 'İ', 'I', 'O', 'U', 'Ö', 'Ü'];
+  const hasVowel = state.matrix.some(l => vowelsSet.has(l));
   if (!hasVowel) {
     const positions = [...Array(9).keys()]
       .sort(() => Math.random() - 0.5)
       .slice(0, 2);
     const added = positions.map(pos => {
-      const v = _VOWELS_ARR[Math.floor(Math.random() * _VOWELS_ARR.length)];
+      const v = vowelsArr[Math.floor(Math.random() * vowelsArr.length)];
       setFillLetter(pos, v);
       return v;
     });
@@ -1915,7 +1948,7 @@ document.getElementById('btn-multi-name-confirm').addEventListener('click', () =
   errEl.textContent = '';
   if (!name) { errEl.textContent = 'Bir isim gir.'; return; }
   document.getElementById('multi-name-popup').hidden = true;
-  socket.emit('grp_create', { displayName: name });
+  socket.emit('grp_create', { displayName: name, lang: getActiveLang() });
 });
 
 document.getElementById('multi-display-name').addEventListener('keydown', e => {

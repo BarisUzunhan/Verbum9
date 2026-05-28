@@ -1848,6 +1848,41 @@ html, body {
   color: #fff;
 }
 
+/* ─── Dil Seçici Modal ─────────────────────────────────────── */
+
+.lang-picker-modal {
+  position: fixed; inset: 0; z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+}
+.lang-picker-modal[hidden] { display: none; }
+.lang-picker-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,.7); backdrop-filter: blur(4px);
+}
+.lang-picker-content {
+  position: relative; z-index: 1;
+  background: var(--surface1); border-radius: 18px;
+  padding: 36px 32px; text-align: center;
+  box-shadow: 0 8px 40px rgba(0,0,0,.5);
+  min-width: 280px;
+}
+.lang-picker-title {
+  font-size: 1.2rem; font-weight: 700;
+  color: var(--text-primary); margin-bottom: 28px;
+}
+.lang-picker-btns {
+  display: flex; gap: 16px; justify-content: center;
+}
+.lang-picker-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  background: var(--surface2); border: 2px solid transparent;
+  border-radius: 14px; padding: 18px 28px; cursor: pointer;
+  color: var(--text-primary); font-size: 1rem; font-weight: 600;
+  transition: border-color .18s, background .18s;
+}
+.lang-picker-btn:hover { border-color: var(--accent); background: var(--surface3, var(--surface2)); }
+.lang-picker-flag { font-size: 2rem; }
+
 /* ─── Arkadaşlar Ekranı ────────────────────────────────────── */
 
 .btn-friends-icon {

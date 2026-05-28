@@ -519,9 +519,34 @@
           <button class="toggle-btn duration-btn" data-dur="300">5 dk</button>
         </div>
       </div>
+      <div class="settings-row" id="settings-lang-row">
+        <span class="settings-label">Dil / Language</span>
+        <div class="toggle-group">
+          <button class="toggle-btn lang-btn active" data-lang="tr">TR</button>
+          <button class="toggle-btn lang-btn" data-lang="en">EN</button>
+        </div>
+      </div>
       <div class="settings-row">
         <span class="settings-label">Yardım</span>
         <button id="btn-show-tutorial" class="btn-tutorial-settings">Tutorial Göster</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dil Seçici Modal (ilk ziyaret) -->
+  <div id="lang-picker-modal" class="lang-picker-modal" hidden>
+    <div class="lang-picker-backdrop"></div>
+    <div class="lang-picker-content">
+      <h2 class="lang-picker-title">Dil Seçin / Choose Language</h2>
+      <div class="lang-picker-btns">
+        <button class="lang-picker-btn" data-lang="tr">
+          <span class="lang-picker-flag">🇹🇷</span>
+          <span>Türkçe</span>
+        </button>
+        <button class="lang-picker-btn" data-lang="en">
+          <span class="lang-picker-flag">🇬🇧</span>
+          <span>English</span>
+        </button>
       </div>
     </div>
   </div>

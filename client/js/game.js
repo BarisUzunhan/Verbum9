@@ -9,6 +9,31 @@ export const PHASES = {
   RESULT: 'result',
 };
 
+const LANG_CONFIGS = {
+  tr: {
+    letterPool: 'AAAAAAAAAAAEEEEEEEEEIIIIIIIINNNNNNNTTTTTTTKKKKKKLLLLLLRRRRRRMMMMMSSSSYYYYOOOODDDBBBUUUÜÜÇÇÇÖÖSŞZZHĞĞPPFVCGVAC',
+    locale: 'tr-TR',
+    minLength: 2,
+    vowels: ['A', 'E', 'I', 'İ', 'O', 'Ö', 'U', 'Ü'],
+  },
+  en: {
+    letterPool: 'EEEEEEEEEEEEEAAAAAAAAOOOOOOOOTTTTTTTTTIIIIIIIINNNNNNNSSSSSSHHHHHHRRRRRRDDDDDLLLLLLCCCUUUMMMWWWFFGGYYPBBVK',
+    locale: 'en-US',
+    minLength: 3,
+    vowels: ['A', 'E', 'I', 'O', 'U'],
+  },
+};
+
+let _activeLang = localStorage.getItem('verbum_lang') || 'tr';
+
+export function setActiveLang(lang) {
+  _activeLang = LANG_CONFIGS[lang] ? lang : 'tr';
+  localStorage.setItem('verbum_lang', _activeLang);
+}
+export function getActiveLang() { return _activeLang; }
+export function getActiveLangConfig() { return LANG_CONFIGS[_activeLang] || LANG_CONFIGS['tr']; }
+
+// Backwards compat — single-player fill still uses Turkish pool
 const LETTER_POOL =
   'AAAAAAAAAAAEEEEEEEEEIIIIIIIINNNNNNNTTTTTTTKKKKKKLLLLLLRRRRRRMMMMMSSSSYYYYOOOODDDBBBUUUÜÜÇÇÇÖÖSŞZZHĞĞPPFVCGVAC';
 
@@ -30,7 +55,8 @@ export const state = {
 };
 
 export function getRandomLetter() {
-  return LETTER_POOL[Math.floor(Math.random() * LETTER_POOL.length)];
+  const pool = getActiveLangConfig().letterPool;
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 export function setFillLetter(pos, letter) {
@@ -71,9 +97,10 @@ export function getCurrentWord() {
 
 export function submitCurrentWord() {
   const word = getCurrentWord();
-  if (word.length < 2) return { status: 'short' };
+  const { locale, minLength } = getActiveLangConfig();
+  if (word.length < minLength) return { status: 'short' };
 
-  const wordLower = word.toLocaleLowerCase('tr-TR');
+  const wordLower = word.toLocaleLowerCase(locale);
   const alreadyCount = state.submittedWords.filter(w => w.word === word).length;
   const maxAllowed = isHomophone(wordLower) ? 2 : 1;
   if (alreadyCount >= maxAllowed) {

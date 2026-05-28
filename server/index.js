@@ -1231,10 +1231,38 @@ const _wordSet      = new Set(_dictData.words.map(w => w.toLocaleLowerCase('tr-T
 const _homophoneSet = new Set((_dictData.homophones || []).map(w => w.toLocaleLowerCase('tr-TR')));
 const _blacklistSet = new Set((_dictData.blacklist  || []).map(w => w.toLocaleLowerCase('tr-TR')));
 
+// Çok dilli sözlük yükleme
+const _langConfig = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/lang_config.json'), 'utf8'));
+const _wordSets = {};
+for (const [lang, cfg] of Object.entries(_langConfig)) {
+  if (!cfg.ready) continue;
+  try {
+    const dictPath = path.join(__dirname, '../data', cfg.wordsFile);
+    const dictData = JSON.parse(fs.readFileSync(dictPath, 'utf8'));
+    const locale = cfg.locale;
+    _wordSets[lang] = {
+      wordSet:      new Set(dictData.words.map(w => w.toLocaleLowerCase(locale))),
+      homophoneSet: new Set((dictData.homophones || []).map(w => w.toLocaleLowerCase(locale))),
+      blacklistSet: new Set((dictData.blacklist  || []).map(w => w.toLocaleLowerCase(locale))),
+      vowels:    new Set(cfg.vowels),
+      vowelsArr: cfg.vowels,
+      locale,
+      minLength: cfg.minLength,
+    };
+  } catch (e) {
+    console.warn(`[lang] ${lang} sözlük yüklenemedi:`, e.message);
+  }
+}
+console.log('[lang] Yüklenen diller:', Object.keys(_wordSets).join(', '));
+
 // TDK anlam önbelleği (bellek içi)
 const _meaningCache = new Map();
 
-const queue = [];                   // { socket, name }[]
+const queues = {};                  // lang → { socket, name, token, lang }[]
+function getQueue(lang) {
+  if (!queues[lang]) queues[lang] = [];
+  return queues[lang];
+}
 const rooms = new Map();            // roomId → room
 const socketRoom = new Map();       // socketId → roomId
 const pendingReconnects = new Map(); // token → { roomId, playerIndex }
@@ -1253,10 +1281,11 @@ setInterval(() => {
   }
 }, 60000);
 
-function createRoom(p1, p2) {
+function createRoom(p1, p2, lang = 'tr') {
   const roomId = crypto.randomBytes(4).toString('hex');
   const room = {
     id: roomId,
+    lang,
     players: [p1.socket, p2.socket],
     names: [p1.name, p2.name],
     tokens: [p1.token, p2.token],
@@ -1279,16 +1308,17 @@ function createRoom(p1, p2) {
   socketRoom.set(p2.socket.id, roomId);
   p1.socket.join(roomId);
   p2.socket.join(roomId);
-  p1.socket.emit('matched', { opponentName: p2.name, playerIndex: 0, turnIndex: 0 });
-  p2.socket.emit('matched', { opponentName: p1.name, playerIndex: 1, turnIndex: 0 });
+  p1.socket.emit('matched', { opponentName: p2.name, playerIndex: 0, turnIndex: 0, lang });
+  p2.socket.emit('matched', { opponentName: p1.name, playerIndex: 1, turnIndex: 0, lang });
 }
 
 const VOWELS_SET = new Set(['A', 'E', 'I', 'İ', 'O', 'Ö', 'U', 'Ü']);
 const VOWELS_ARR = ['A', 'E', 'İ', 'I', 'O', 'U', 'Ö', 'Ü'];
 
 function roomCountdown(room) {
+  const langSet = _wordSets[room.lang] || _wordSets['tr'];
   // Hiç sesli harf yoksa 2 rastgele sessiz harfi sesli harfle değiştir
-  const hasVowel = room.matrix.some(l => VOWELS_SET.has(l));
+  const hasVowel = room.matrix.some(l => langSet.vowels.has(l));
   console.log(`[roomCountdown] matris: [${room.matrix.join(',')}] | sesliHarf: ${hasVowel}`);
   let delay = 0;
   if (!hasVowel) {
@@ -1296,7 +1326,7 @@ function roomCountdown(room) {
       .sort(() => Math.random() - 0.5)
       .slice(0, 2);
     const changed = positions.map(pos => {
-      const vowel = VOWELS_ARR[Math.floor(Math.random() * VOWELS_ARR.length)];
+      const vowel = langSet.vowelsArr[Math.floor(Math.random() * langSet.vowelsArr.length)];
       room.matrix[pos] = vowel;
       return { pos, vowel };
     });
@@ -1376,9 +1406,11 @@ async function roomEnd(room) {
 }
 
 function validateWord(room, pIdx, rawWord) {
-  const wordU = (rawWord || '').toLocaleUpperCase('tr-TR');
-  const wordL = wordU.toLocaleLowerCase('tr-TR');
-  if (wordU.length < 2) return { status: 'short', word: wordU, points: 0 };
+  const langSet = _wordSets[room.lang] || _wordSets['tr'];
+  const locale = langSet.locale;
+  const wordU = (rawWord || '').toLocaleUpperCase(locale);
+  const wordL = wordU.toLocaleLowerCase(locale);
+  if (wordU.length < langSet.minLength) return { status: 'short', word: wordU, points: 0 };
   const mc = {};
   room.matrix.forEach(l => { mc[l] = (mc[l] || 0) + 1; });
   const need = {};
@@ -1386,10 +1418,10 @@ function validateWord(room, pIdx, rawWord) {
   for (const ch in need) {
     if ((mc[ch] || 0) < need[ch]) return { status: 'invalid', word: wordU, points: 0 };
   }
-  if (!_wordSet.has(wordL) || _blacklistSet.has(wordL)) return { status: 'invalid', word: wordU, points: 0 };
+  if (!langSet.wordSet.has(wordL) || langSet.blacklistSet.has(wordL)) return { status: 'invalid', word: wordU, points: 0 };
   const pw = room.words[pIdx];
   const cnt = pw.filter(w => w.word === wordU).length;
-  const max = _homophoneSet.has(wordL) ? 2 : 1;
+  const max = langSet.homophoneSet.has(wordL) ? 2 : 1;
   if (cnt >= max) return { status: 'duplicate', word: wordU, points: 0 };
   return { status: 'valid', word: wordU, points: wordU.length };
 }
@@ -1578,7 +1610,7 @@ io.on('connection', socket => {
 
   // ─── Grup Odası Socket Olayları ──────────────────────────────
 
-  socket.on('grp_create', async ({ displayName }) => {
+  socket.on('grp_create', async ({ displayName, lang }) => {
     if (!authToken) return;
     const user = await userService.getUserByToken(authToken);
     if (!user) return;
@@ -1590,9 +1622,10 @@ io.on('connection', socket => {
       else socketGroupRoom.delete(socket.id);
     }
     const name = ((displayName || '').trim() || user.username).slice(0, 20);
+    const gameLang = (_wordSets[lang] ? lang : null) || 'tr';
     const code = genGroupCode();
     const room = {
-      code, host: { socket, userId: user.id, username: user.username, displayName: name },
+      code, lang: gameLang, host: { socket, userId: user.id, username: user.username, displayName: name },
       matrix: [], duration: 180, status: 'lobby', joinMode: null,
       players: [{ socket, userId: user.id, username: user.username, displayName: name, words: [], score: 0 }],
       pendingPlayers: [], timerInterval: null, timeLeft: 180,
@@ -1601,7 +1634,7 @@ io.on('connection', socket => {
     socketGroupRoom.set(socket.id, code);
     userGroupRoom.set(String(user.id), code);
     socket.join(`grp_${code}`);
-    socket.emit('grp_created', { code });
+    socket.emit('grp_created', { code, lang: gameLang });
   });
 
   socket.on('grp_set_invite_mode', ({ code, mode }) => {
@@ -1717,9 +1750,11 @@ io.on('connection', socket => {
     if (!room || room.status !== 'playing') return;
     const player = room.players.find(p => p.socket.id === socket.id);
     if (!player) return;
-    const wordU = (word || '').toLocaleUpperCase('tr-TR');
-    const wordL = wordU.toLocaleLowerCase('tr-TR');
-    if (wordU.length < 2) return socket.emit('grp_word_result', { status: 'short', word: wordU, points: 0 });
+    const langSet = _wordSets[room.lang] || _wordSets['tr'];
+    const locale = langSet.locale;
+    const wordU = (word || '').toLocaleUpperCase(locale);
+    const wordL = wordU.toLocaleLowerCase(locale);
+    if (wordU.length < langSet.minLength) return socket.emit('grp_word_result', { status: 'short', word: wordU, points: 0 });
     const mc = {};
     room.matrix.forEach(l => { mc[l] = (mc[l] || 0) + 1; });
     const need = {};
@@ -1727,10 +1762,10 @@ io.on('connection', socket => {
     for (const ch in need) {
       if ((mc[ch] || 0) < need[ch]) return socket.emit('grp_word_result', { status: 'invalid', word: wordU, points: 0 });
     }
-    if (!_wordSet.has(wordL) || _blacklistSet.has(wordL))
+    if (!langSet.wordSet.has(wordL) || langSet.blacklistSet.has(wordL))
       return socket.emit('grp_word_result', { status: 'invalid', word: wordU, points: 0 });
     const cnt = player.words.filter(w => w === wordU).length;
-    const max = _homophoneSet.has(wordL) ? 2 : 1;
+    const max = langSet.homophoneSet.has(wordL) ? 2 : 1;
     if (cnt >= max) return socket.emit('grp_word_result', { status: 'duplicate', word: wordU, points: 0 });
     player.words.push(wordU);
     player.score += wordU.length;
@@ -1782,23 +1817,27 @@ io.on('connection', socket => {
     if (room) leaveGroupRoom(socket, room);
   });
 
-  socket.on('join_queue', ({ name }) => {
+  socket.on('join_queue', ({ name, lang }) => {
     if (socketRoom.has(socket.id)) return; // zaten bir odada
     const pName = (name || 'Oyuncu').slice(0, 20);
-    if (queue.find(p => p.socket.id === socket.id)) return;
-    queue.push({ socket, name: pName, token: authToken });
-    console.log(`Kuyruğa eklendi: ${pName} (kuyruk: ${queue.length})`);
-    socket.emit('queued', { position: queue.length });
-    if (queue.length >= 2) {
-      const [p1, p2] = queue.splice(0, 2);
-      console.log(`Eşleşti: ${p1.name} vs ${p2.name}`);
-      createRoom(p1, p2);
+    const gameLang = (_wordSets[lang] ? lang : null) || 'tr';
+    const q = getQueue(gameLang);
+    if (q.find(p => p.socket.id === socket.id)) return;
+    q.push({ socket, name: pName, token: authToken, lang: gameLang });
+    console.log(`Kuyruğa eklendi [${gameLang}]: ${pName} (kuyruk: ${q.length})`);
+    socket.emit('queued', { position: q.length });
+    if (q.length >= 2) {
+      const [p1, p2] = q.splice(0, 2);
+      console.log(`Eşleşti [${gameLang}]: ${p1.name} vs ${p2.name}`);
+      createRoom(p1, p2, gameLang);
     }
   });
 
   socket.on('leave_queue', () => {
-    const i = queue.findIndex(p => p.socket.id === socket.id);
-    if (i !== -1) queue.splice(i, 1);
+    for (const q of Object.values(queues)) {
+      const i = q.findIndex(p => p.socket.id === socket.id);
+      if (i !== -1) { q.splice(i, 1); break; }
+    }
   });
 
   socket.on('fill_cell', ({ pos, letter }) => {
@@ -1852,13 +1891,15 @@ io.on('connection', socket => {
     }
 
     // Matristeki harflerden kelime bul
+    const hintLangSet = _wordSets[room.lang] || _wordSets['tr'];
+    const hintLocale = hintLangSet.locale;
     const mc = {};
     room.matrix.forEach(l => { mc[l] = (mc[l] || 0) + 1; });
-    const found = new Set(room.words[pIdx].map(w => w.word.toLocaleLowerCase('tr-TR')));
+    const found = new Set(room.words[pIdx].map(w => w.word.toLocaleLowerCase(hintLocale)));
     const candidates = [];
-    for (const word of _wordSet) {
-      if (found.has(word) || word.length < 3) continue;
-      const wordU = word.toLocaleUpperCase('tr-TR');
+    for (const word of hintLangSet.wordSet) {
+      if (found.has(word) || word.length < hintLangSet.minLength) continue;
+      const wordU = word.toLocaleUpperCase(hintLocale);
       const need = {};
       for (const ch of wordU) need[ch] = (need[ch] || 0) + 1;
       let ok = true;
@@ -1961,8 +2002,10 @@ io.on('connection', socket => {
       userService.updateLastSeen(socket._userId);
     }
     // Kuyruktan çıkar
-    const qi = queue.findIndex(p => p.socket.id === socket.id);
-    if (qi !== -1) queue.splice(qi, 1);
+    for (const q of Object.values(queues)) {
+      const qi = q.findIndex(p => p.socket.id === socket.id);
+      if (qi !== -1) { q.splice(qi, 1); break; }
+    }
 
     const roomId = socketRoom.get(socket.id);
     if (roomId) {
