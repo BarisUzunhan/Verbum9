@@ -744,6 +744,11 @@ socket.on('connect', () => {
       socket.emit('join_queue', { name: currentUser.username, lang: getActiveLang() });
     }
   }
+  // Çoklu mod bekleme/host ekranındayken yeniden bağlanınca odayı kontrol et
+  const activeScreen = document.querySelector('.screen.active')?.id;
+  if (_grpCode && ['screen-multi-wait', 'screen-multi-host'].includes(activeScreen)) {
+    socket.emit('grp_check_active');
+  }
 });
 
 socket.on('queued', () => {
@@ -2237,13 +2242,25 @@ socket.on('grp_cancelled', () => {
   showScreen('screen-multi-lobby');
 });
 
-socket.on('grp_active_room', ({ active, code }) => {
+socket.on('grp_active_room', ({ active, code, status }) => {
   const btn = document.getElementById('btn-grp-rejoin');
+  const activeScreen = document.querySelector('.screen.active')?.id;
   if (active && code) {
     btn.hidden = false;
     btn.dataset.code = code;
+    // Bekleme ekranındaysak otomatik rejoin dene
+    if (activeScreen === 'screen-multi-wait') {
+      socket.emit('grp_rejoin', { code });
+    }
   } else {
     btn.hidden = true;
+    // Bekleme ekranındaysak oda kapandı bildir
+    if (activeScreen === 'screen-multi-wait') {
+      showToast('Oda artık mevcut değil.', 3000);
+      mode = 'solo';
+      _grpCode = '';
+      showScreen('screen-multi-lobby');
+    }
   }
 });
 

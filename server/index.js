@@ -1519,23 +1519,36 @@ function leaveGroupRoom(socket, room) {
     return;
   }
 
-  // Lobi: oyuncuyu listeden çıkar
-  if (playerInRoom) userGroupRoom.delete(String(playerInRoom.userId));
-  room.players = room.players.filter(p => p.socket?.id !== socket.id);
-  room.pendingPlayers = room.pendingPlayers.filter(p => p.socket?.id !== socket.id);
-
+  // Lobi: host ayrılırsa odayı kapat; oyuncu ayrılırsa 30s grace period ver (rejoin şansı)
   if (isHost) {
     io.to(`grp_${room.code}`).emit('grp_cancelled');
     clearInterval(room.timerInterval);
     for (const p of [...room.players, ...room.pendingPlayers]) {
+      if (p._disconnectTimer) clearTimeout(p._disconnectTimer);
       if (p.socket) socketGroupRoom.delete(p.socket.id);
       userGroupRoom.delete(String(p.userId));
     }
     groupRooms.delete(room.code);
+    return;
+  }
+
+  if (playerInRoom) {
+    // Socket'i null yap, 30s içinde geri dönmezse odadan çıkar
+    playerInRoom.socket = null;
+    if (playerInRoom._disconnectTimer) clearTimeout(playerInRoom._disconnectTimer);
+    playerInRoom._disconnectTimer = setTimeout(() => {
+      if (!playerInRoom.socket) {
+        userGroupRoom.delete(String(playerInRoom.userId));
+        room.players = room.players.filter(p => p.userId !== playerInRoom.userId);
+        room.pendingPlayers = room.pendingPlayers.filter(p => p.userId !== playerInRoom.userId);
+        io.to(`grp_${room.code}`).emit('grp_players_update', {
+          players: room.players.filter(p => p.socket).map(p => ({ displayName: p.displayName, userId: p.userId }))
+        });
+      }
+    }, 30000);
   } else {
-    io.to(`grp_${room.code}`).emit('grp_players_update', {
-      players: room.players.map(p => ({ displayName: p.displayName, userId: p.userId }))
-    });
+    // pendingPlayers içindeyse hemen çıkar
+    room.pendingPlayers = room.pendingPlayers.filter(p => p.socket?.id !== socket.id);
   }
 }
 
@@ -1821,11 +1834,11 @@ io.on('connection', socket => {
     const code = userGroupRoom.get(String(user.id));
     if (!code) return socket.emit('grp_active_room', { active: false });
     const room = groupRooms.get(code);
-    if (!room || room.status !== 'playing') {
+    if (!room || !['playing', 'lobby'].includes(room.status)) {
       userGroupRoom.delete(String(user.id));
       return socket.emit('grp_active_room', { active: false });
     }
-    socket.emit('grp_active_room', { active: true, code, hostName: room.host.displayName, timeLeft: room.timeLeft });
+    socket.emit('grp_active_room', { active: true, code, status: room.status, hostName: room.host.displayName, timeLeft: room.timeLeft });
   });
 
   socket.on('grp_rejoin', async ({ code }) => {
@@ -1833,7 +1846,23 @@ io.on('connection', socket => {
     const user = await userService.getUserByToken(authToken);
     if (!user) return;
     const room = groupRooms.get(code);
-    if (!room || room.status !== 'playing')
+    if (!room) return socket.emit('grp_join_error', { error: 'Oda artık mevcut değil.' });
+
+    if (room.status === 'lobby') {
+      // Lobi: grace period içindeki oyuncuyu geri al
+      const player = room.players.find(p => String(p.userId) === String(user.id) && !p.socket);
+      if (!player) return socket.emit('grp_join_error', { error: 'Bu odada kayıtlı değilsiniz.' });
+      if (player._disconnectTimer) clearTimeout(player._disconnectTimer);
+      player._disconnectTimer = null;
+      player.socket = socket;
+      socketGroupRoom.set(socket.id, code);
+      userGroupRoom.set(String(user.id), code);
+      socket.join(`grp_${code}`);
+      socket.emit('grp_approved', { code, hostName: room.host.displayName, lang: room.lang });
+      return;
+    }
+
+    if (room.status !== 'playing')
       return socket.emit('grp_join_error', { error: 'Oyun artık aktif değil.' });
     const player = room.players.find(p => String(p.userId) === String(user.id));
     if (!player)
