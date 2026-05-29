@@ -4,6 +4,8 @@ let blacklistSet = new Set();
 let wordArray = [];
 let _locale = 'tr-TR';
 
+const LANG_LOCALE = { tr: 'tr-TR', en: 'en-US', de: 'de-DE', es: 'es-ES', fr: 'fr-FR', pt: 'pt-BR' };
+
 export async function loadDictionary(lang = 'tr') {
   await _loadForLang(lang);
 }
@@ -14,7 +16,7 @@ export async function switchDictionary(lang) {
 
 async function _loadForLang(lang) {
   const file = lang === 'tr' ? '/data/words.json' : `/data/words_${lang}.json`;
-  const locale = lang === 'tr' ? 'tr-TR' : 'en-US';
+  const locale = LANG_LOCALE[lang] || 'en-US';
   _locale = locale;
   const res = await fetch(file);
   const data = await res.json();

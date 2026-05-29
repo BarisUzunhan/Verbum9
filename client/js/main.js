@@ -8,7 +8,7 @@ import {
   submitCurrentWord, findMissedWords,
   startCountdown, startGame, stopGame, restartTimer, resetToFill,
   setGameDuration,
-  setActiveLang, getActiveLang, getActiveLangConfig,
+  setActiveLang, setActiveLangTemp, getActiveLang, getActiveLangConfig,
 } from './game.js';
 import { playWordFound, playWarningBeep, playUrgentBeep, playInvalidWord, setSoundEnabled } from './sounds.js';
 import {
@@ -1018,13 +1018,13 @@ socket.on('reconnected_to_game', ({ phase, matrix, turnIndex, timeLeft, playerIn
 
 // ─── Matristeki harflerle kurulabilecek ama yazılmayan kelimeler ─────────────
 
-function _findMissedForMatrix(matrix, foundSet) {
+function _findMissedForMatrix(matrix, foundSet, locale = getActiveLangConfig().locale) {
   const mc = {};
   for (const l of matrix) if (l) mc[l] = (mc[l] || 0) + 1;
   const possible = [];
   for (const word of getWordArray()) {
     if (foundSet.has(word)) continue;
-    const wordU = word.toLocaleUpperCase('tr-TR');
+    const wordU = word.toLocaleUpperCase(locale);
     const needed = {};
     for (const ch of wordU) needed[ch] = (needed[ch] || 0) + 1;
     let ok = true;
@@ -1033,7 +1033,7 @@ function _findMissedForMatrix(matrix, foundSet) {
     }
     if (ok) possible.push(word);
   }
-  return possible.sort((a, b) => b.length - a.length || a.localeCompare(b, 'tr'));
+  return possible.sort((a, b) => b.length - a.length || a.localeCompare(b, locale));
 }
 
 // ─── Çok oyunculu doldurma ───────────────────────────────────
@@ -1924,7 +1924,7 @@ async function loadOpenRooms() {
 }
 
 function joinOpenRoom(code, lang) {
-  if (lang) { setActiveLang(lang); applyLang(lang); switchDictionary(lang); }
+  if (lang) { setActiveLangTemp(lang); applyLang(lang); switchDictionary(lang); }
   socket.emit('grp_request_join', { code });
   document.getElementById('mw-host-name').textContent = '—';
   document.getElementById('mw-code').textContent = code;
@@ -2170,6 +2170,7 @@ document.getElementById('btn-grp-rejoin').addEventListener('click', () => {
 document.getElementById('btn-mw-leave').addEventListener('click', () => {
   socket.emit('grp_leave');
   _grpCode = '';
+  restoreOriginalLang();
   showScreen('screen-multi-lobby');
 });
 
@@ -2177,6 +2178,7 @@ document.getElementById('btn-mw-leave').addEventListener('click', () => {
 document.getElementById('btn-grp-to-lobby').addEventListener('click', () => {
   mode = 'solo';
   _grpCode = '';
+  restoreOriginalLang();
   renderLobby();
   showScreen('screen-lobby');
 });
@@ -2214,10 +2216,17 @@ socket.on('grp_join_error', ({ error }) => {
   showScreen('screen-multi-lobby');
 });
 
+function restoreOriginalLang() {
+  const orig = localStorage.getItem('verbum_lang') || 'tr';
+  setActiveLang(orig);
+  applyLang(orig);
+  switchDictionary(orig);
+}
+
 socket.on('grp_approved', ({ code, hostName, lang }) => {
   _grpCode = code;
   _grpHostName = hostName || '—';
-  if (lang) { setActiveLang(lang); applyLang(lang); switchDictionary(lang); }
+  if (lang) { setActiveLangTemp(lang); applyLang(lang); switchDictionary(lang); }
   document.getElementById('mw-host-name').textContent = hostName || '—';
   document.getElementById('mw-code').textContent = code;
   document.getElementById('mw-status').textContent = 'Oda sahibinin oyunu başlatması bekleniyor...';
@@ -2232,6 +2241,7 @@ socket.on('grp_waiting_approval', () => {
 socket.on('grp_rejected', () => {
   showToast('Oda sahibi katılımını reddetti.', 4000);
   _grpCode = '';
+  restoreOriginalLang();
   showScreen('screen-multi-lobby');
 });
 
@@ -2239,6 +2249,7 @@ socket.on('grp_cancelled', () => {
   showToast('Oda sahibi oyunu iptal etti.', 4000);
   mode = 'solo';
   _grpCode = '';
+  restoreOriginalLang();
   showScreen('screen-multi-lobby');
 });
 
@@ -2404,8 +2415,9 @@ socket.on('grp_ended', ({ rankings, words }) => {
   state.phase = PHASES.RESULT;
   removeGameEvents();
   releaseWakeLock();
-  const foundSet = new Set(words.map(w => w.word.toLocaleLowerCase('tr-TR')));
-  const missed = _findMissedForMatrix(state.matrix, foundSet);
+  const _locale = getActiveLangConfig().locale;
+  const foundSet = new Set(words.map(w => w.word.toLocaleLowerCase(_locale)));
+  const missed = _findMissedForMatrix(state.matrix, foundSet, _locale);
   renderGroupResult(rankings, words, missed);
   showScreen('screen-group-result');
 });

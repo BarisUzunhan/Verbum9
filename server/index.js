@@ -1519,6 +1519,16 @@ function leaveGroupRoom(socket, room) {
     return;
   }
 
+  if (room.status !== 'lobby') {
+    // Bitmiş oda (ended vb.): hemen temizle, grace period yok
+    if (playerInRoom) {
+      if (playerInRoom._disconnectTimer) clearTimeout(playerInRoom._disconnectTimer);
+      userGroupRoom.delete(String(playerInRoom.userId));
+      room.players = room.players.filter(p => p.userId !== playerInRoom.userId);
+    }
+    return;
+  }
+
   // Lobi: host ayrılırsa odayı kapat; oyuncu ayrılırsa 30s grace period ver (rejoin şansı)
   if (isHost) {
     io.to(`grp_${room.code}`).emit('grp_cancelled');
@@ -1537,7 +1547,8 @@ function leaveGroupRoom(socket, room) {
     playerInRoom.socket = null;
     if (playerInRoom._disconnectTimer) clearTimeout(playerInRoom._disconnectTimer);
     playerInRoom._disconnectTimer = setTimeout(() => {
-      if (!playerInRoom.socket) {
+      // userGroupRoom hâlâ bu odaya mı işaret ediyor? Kontrol et
+      if (!playerInRoom.socket && userGroupRoom.get(String(playerInRoom.userId)) === room.code) {
         userGroupRoom.delete(String(playerInRoom.userId));
         room.players = room.players.filter(p => p.userId !== playerInRoom.userId);
         room.pendingPlayers = room.pendingPlayers.filter(p => p.userId !== playerInRoom.userId);
@@ -1694,7 +1705,7 @@ io.on('connection', socket => {
 
   socket.on('grp_set_invite_mode', ({ code, mode }) => {
     const room = groupRooms.get(code);
-    if (!room || room.host.socket.id !== socket.id || room.status !== 'lobby') return;
+    if (!room || room.host.socket?.id !== socket.id || room.status !== 'lobby') return;
     if (!['open', 'code'].includes(mode)) return;
     room.joinMode = mode;
     socket.emit('grp_mode_set', { mode });
@@ -1752,7 +1763,7 @@ io.on('connection', socket => {
 
   socket.on('grp_approve', ({ code, targetSocketId, approve }) => {
     const room = groupRooms.get(code);
-    if (!room || room.host.socket.id !== socket.id || room.status !== 'lobby') return;
+    if (!room || room.host.socket?.id !== socket.id || room.status !== 'lobby') return;
     const idx = room.pendingPlayers.findIndex(p => p.socket.id === targetSocketId);
     if (idx === -1) return;
     const [player] = room.pendingPlayers.splice(idx, 1);
@@ -1772,7 +1783,7 @@ io.on('connection', socket => {
 
   socket.on('grp_start', ({ code, matrix, duration }) => {
     const room = groupRooms.get(code);
-    if (!room || room.host.socket.id !== socket.id || room.status !== 'lobby') return;
+    if (!room || room.host.socket?.id !== socket.id || room.status !== 'lobby') return;
     if (!matrix || matrix.length !== 9 || matrix.some(l => !l))
       return socket.emit('grp_start_error', { error: 'Matris eksik veya hatalı.' });
     room.matrix = matrix;

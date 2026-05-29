@@ -30,6 +30,10 @@ export function setActiveLang(lang) {
   _activeLang = LANG_CONFIGS[lang] ? lang : 'tr';
   localStorage.setItem('verbum_lang', _activeLang);
 }
+// Grup oyunu sırasında geçici dil değişimi — localStorage'a kaydetmez
+export function setActiveLangTemp(lang) {
+  _activeLang = LANG_CONFIGS[lang] ? lang : 'tr';
+}
 export function getActiveLang() { return _activeLang; }
 export function getActiveLangConfig() { return LANG_CONFIGS[_activeLang] || LANG_CONFIGS['tr']; }
 
@@ -205,20 +209,21 @@ export function formatTime(seconds) {
 // ─── Matristeki harflerle kurulabilecek kelimeleri bul ────────
 
 export function findMissedWords() {
+  const { locale } = getActiveLangConfig();
   const matrixCounts = {};
   for (const letter of state.matrix) {
     if (letter) matrixCounts[letter] = (matrixCounts[letter] || 0) + 1;
   }
 
   const foundLower = new Set(
-    state.submittedWords.filter(w => w.valid).map(w => w.word.toLocaleLowerCase('tr-TR'))
+    state.submittedWords.filter(w => w.valid).map(w => w.word.toLocaleLowerCase(locale))
   );
 
   const possible = [];
   for (const word of getWordArray()) {
     if (foundLower.has(word)) continue;
 
-    const wordUpper = word.toLocaleUpperCase('tr-TR');
+    const wordUpper = word.toLocaleUpperCase(locale);
     const needed = {};
     for (const ch of wordUpper) {
       needed[ch] = (needed[ch] || 0) + 1;
@@ -232,5 +237,5 @@ export function findMissedWords() {
     if (ok) possible.push(word);
   }
 
-  return possible.sort((a, b) => b.length - a.length || a.localeCompare(b, 'tr'));
+  return possible.sort((a, b) => b.length - a.length || a.localeCompare(b, locale));
 }
