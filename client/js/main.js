@@ -687,7 +687,7 @@ async function goToDailyLobby() {
   document.getElementById('btn-daily-start').disabled = false;
   document.getElementById('btn-daily-start').textContent = 'Oynamaya Başla';
 
-  const data = await apiFetch('GET', '/api/daily');
+  const data = await apiFetch('GET', `/api/daily?lang=${getActiveLang()}`);
 
   // Dünkü sonuç
   if (data.yesterday) {
@@ -751,7 +751,7 @@ function startDailyGame(matrix) {
         showScreen('screen-result');
         setTimeout(() => startResult(), 100);
         const wordsFound = state.submittedWords.filter(w => w.valid).length;
-        const res = await apiFetch('POST', '/api/daily/submit', { score: state.score, wordsFound });
+        const res = await apiFetch('POST', '/api/daily/submit', { score: state.score, wordsFound, lang: getActiveLang() });
         if (res.ok) {
           document.getElementById('daily-rank-number').textContent = `${res.currentRank}. sıra`;
           document.getElementById('daily-result-banner').hidden = false;
@@ -1406,7 +1406,7 @@ function _startCountdown() {
         setTimeout(() => startResult(), 100);
         if (mode === 'daily') {
           const wordsFound = state.submittedWords.filter(w => w.valid).length;
-          const data = await apiFetch('POST', '/api/daily/submit', { score: state.score, wordsFound });
+          const data = await apiFetch('POST', '/api/daily/submit', { score: state.score, wordsFound, lang: getActiveLang() });
           if (data.ok) {
             document.getElementById('daily-rank-number').textContent = `${data.currentRank}. sıra`;
             document.getElementById('daily-result-banner').hidden = false;

@@ -298,21 +298,26 @@ function getDailyDate() {
 }
 
 let _nineLetterWords = null;
-function getNineLetterWords() {
-  if (_nineLetterWords) return _nineLetterWords;
-  const data = JSON.parse(require('fs').readFileSync(WORDS_PATH, 'utf8'));
-  _nineLetterWords = (data.words || []).filter(w => w.length === 9);
+function getNineLetterWords(lang = 'tr') {
+  const ls = _wordSets[lang];
+  if (ls && ls.nineLetterWords) return ls.nineLetterWords;
+  if (!_nineLetterWords) {
+    const data = JSON.parse(require('fs').readFileSync(WORDS_PATH, 'utf8'));
+    _nineLetterWords = (data.words || []).filter(w => w.length === 9);
+  }
   return _nineLetterWords;
 }
 
-async function getTodayPuzzle() {
+async function getTodayPuzzle(lang = 'tr') {
   const date = getDailyDate();
-  const { data: existing } = await supabase.from('daily_puzzles').select('*').eq('date', date).maybeSingle();
+  const { data: existing } = await supabase.from('daily_puzzles')
+    .select('*').eq('date', date).eq('lang', lang).maybeSingle();
   if (existing) return existing;
-  const words = getNineLetterWords();
-  const word = words[Math.floor(Math.random() * words.length)].toLocaleUpperCase('tr-TR');
+  const words = getNineLetterWords(lang);
+  const locale = (_wordSets[lang] || _wordSets['tr']).locale;
+  const word = words[Math.floor(Math.random() * words.length)].toLocaleUpperCase(locale);
   const matrix = [...word].sort(() => Math.random() - 0.5);
-  const { data } = await supabase.from('daily_puzzles').insert({ date, word, matrix }).select().single();
+  const { data } = await supabase.from('daily_puzzles').insert({ date, lang, word, matrix }).select().single();
   return data;
 }
 
@@ -837,19 +842,19 @@ app.get('/api/meaning/:word', async (req, res) => {
     .select('meanings')
     .eq('word', dbKey)
     .maybeSingle();
-  if (stored) {
+
+  // DB'de anlamlı sonuç varsa direkt dön
+  if (stored && stored.meanings && stored.meanings.length > 0) {
     const result = { word: rawWord, meanings: stored.meanings };
     _meaningCache.set(cacheKey, result);
     return res.json(result);
   }
 
-  // Türkçe için dış API çağrısı yapılmıyor — sadece oyun DB'si
-  if (lang === 'tr') {
-    _meaningCache.set(cacheKey, null);
-    return res.json(null);
-  }
+  // Türkçe için dış API yok — sadece oyun DB'si
+  if (lang === 'tr') return res.json(null);
 
-  // Diğer diller: dictionaryapi.dev'den çek ve Supabase'e kaydet
+  // Diğer diller: dictionaryapi.dev'den çek
+  // (DB'de yoksa veya boş meanings varsa — populate sırasında rate-limit yemiş olabilir)
   try {
     const apiLang = DICT_API_LANG[lang] || lang;
     const raw = await fetchURL(`https://api.dictionaryapi.dev/api/v2/entries/${apiLang}/${encodeURIComponent(rawWord)}`);
@@ -871,11 +876,9 @@ app.get('/api/meaning/:word', async (req, res) => {
     if (meanings.length > 0) {
       const result = { word: rawWord, meanings };
       _meaningCache.set(cacheKey, result);
-      // Arka planda Supabase'e kaydet (bir sonraki sorguda DB'den gelsin)
       supabase.from('word_meanings').upsert({ word: dbKey, meanings }).catch(() => {});
       return res.json(result);
     }
-    _meaningCache.set(cacheKey, null);
     return res.json(null);
   } catch {
     return res.json(null);
@@ -1197,11 +1200,13 @@ app.get('/api/group/open', requireAuth, (req, res) => {
 // ─── Günlük Mod API ──────────────────────────────────────────
 
 app.get('/api/daily', requireAuth, async (req, res) => {
+  const reqLang = (req.query.lang || 'tr').replace(/[^a-z]/g, '');
+  const lang = _wordSets[reqLang] ? reqLang : 'tr';
   const today = getDailyDate();
-  const puzzle = await getTodayPuzzle();
+  const puzzle = await getTodayPuzzle(lang);
 
   const { data: todayScore } = await supabase.from('daily_scores')
-    .select('*').eq('user_id', req.user.id).eq('date', today).maybeSingle();
+    .select('*').eq('user_id', req.user.id).eq('date', today).eq('lang', lang).maybeSingle();
 
   // Dünkü sonuç
   const tz = process.env.DAILY_RESET_TIMEZONE || 'UTC';
@@ -1209,12 +1214,12 @@ app.get('/api/daily', requireAuth, async (req, res) => {
   d.setDate(d.getDate() - 1);
   const yesterday = d.toLocaleDateString('en-CA', { timeZone: tz });
   const { data: ystScore } = await supabase.from('daily_scores')
-    .select('score, final_rank, kl_earned').eq('user_id', req.user.id).eq('date', yesterday).maybeSingle();
+    .select('score, final_rank, kl_earned').eq('user_id', req.user.id).eq('date', yesterday).eq('lang', lang).maybeSingle();
 
   if (todayScore) {
     const { count } = await supabase.from('daily_scores')
       .select('*', { count: 'exact', head: true })
-      .eq('date', today).gt('score', todayScore.score);
+      .eq('date', today).eq('lang', lang).gt('score', todayScore.score);
     const currentRank = (count || 0) + 1;
     return res.json({ played: true, score: todayScore.score, currentRank, yesterday: ystScore || null });
   }
@@ -1224,20 +1229,21 @@ app.get('/api/daily', requireAuth, async (req, res) => {
 
 app.post('/api/daily/submit', requireAuth, async (req, res) => {
   const today = getDailyDate();
-  const { score, wordsFound } = req.body;
+  const { score, wordsFound, lang: reqLang } = req.body;
+  const lang = (_wordSets[reqLang] ? reqLang : null) || 'tr';
 
   const { data: existing } = await supabase.from('daily_scores')
-    .select('id').eq('user_id', req.user.id).eq('date', today).maybeSingle();
+    .select('id').eq('user_id', req.user.id).eq('date', today).eq('lang', lang).maybeSingle();
   if (existing) return res.json({ ok: false, error: 'Zaten oynadın.' });
 
   await supabase.from('daily_scores').insert({
-    user_id: req.user.id, date: today,
+    user_id: req.user.id, date: today, lang,
     score: score || 0, words_found: wordsFound || 0,
   });
 
   const { count } = await supabase.from('daily_scores')
     .select('*', { count: 'exact', head: true })
-    .eq('date', today).gt('score', score || 0);
+    .eq('date', today).eq('lang', lang).gt('score', score || 0);
   const currentRank = (count || 0) + 1;
 
   res.json({ ok: true, currentRank });
@@ -1312,6 +1318,7 @@ for (const [lang, cfg] of Object.entries(_langConfig)) {
       vowelsArr: cfg.vowels,
       locale,
       minLength: cfg.minLength,
+      nineLetterWords: dictData.words.filter(w => w.length === 9),
     };
   } catch (e) {
     console.warn(`[lang] ${lang} sözlük yüklenemedi:`, e.message);
